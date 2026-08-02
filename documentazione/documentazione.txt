@@ -1,0 +1,8 @@
+Durante lo sviluppo di questa consegna sono state fatte varie assunzioni e scelte progettuali.
+
+// inserimento spiegazione di quanto entra il bot o meno
+
+Il numero massimo di client è arbitrario, poichè questo programma necessita di una struttura
+per la sincronizzazione circolare e considerato il numero arbitrario di client, per l'apertura dei semafori
+si è optato nell'adottare liste a puntatore per registrare le informazioni relative ai client per poi ciclare
+su questa struttura andando a contarne quindi il numeor di client
