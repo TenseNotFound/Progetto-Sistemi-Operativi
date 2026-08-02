@@ -26,7 +26,11 @@
 
 typedef game_info info;
 typedef azioni mosse;
-int port;
+
+volatile sig_atomic_t timeout = 1;
+int port, sem;
+
+void timeout_lobby(int sig);
 
 int main(int argc, char **argv){
 
@@ -100,7 +104,7 @@ int main(int argc, char **argv){
         exit(-1);
     }
 
-    // dimensione del backlocg -> dimensione della coda di attesa a 16 data dal define iniziale
+    // dimensione del backlog -> dimensione della coda di attesa a 16 data dal define iniziale
     if (listen(llisten, BACKLOG) < 0) {
         perror("listen() fallita");
         close(llisten);
@@ -113,7 +117,27 @@ int main(int argc, char **argv){
     printf(" Per chiudere : CTRL + C\n==================================================\n[*] In attesa di nuove connessioni...\n\n");
 
     fflush(stdout);
-        
+    
+    struct sigaction sa;
+    sa.sa_flags = 0;
+    sa.sa_handler = timeout_lobby;
+    sigemptyset(&sa.sa_mask);
+
+    if(sigaction(SIGALRM, &sa, NULL) == -1){
+        perror("Errore nell'installare la sigaction, procedo con l'installazione della sigal");
+        signal(SIGALRM, timeout_lobby);
+    }
+
+    printf("Lobby aperta per 30s\n");
+    alarm(30);
+
+    //lobby con timeout
+    while(timeout){
+        /*
+            ciclo di ascolto e attivazione dei thread/utente per l'handling della partita
+        */
+
+    }
     
 
 
@@ -130,4 +154,9 @@ int main(int argc, char **argv){
 
 
 
+}
+
+
+void timeout_lobby(int sig){
+    timeout = 0;
 }
