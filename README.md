@@ -14,3 +14,7 @@ qualcuno e' stato colpito se uno dei giocatori e' il vincitore (o se e' stato
 eliminato), altrimenti abilita il prossimo client a spedire una mossa.
 La generazione della posizione delle navi per ogni client e' lasciata alla
 discrezione dello studente.      
+
+
+Il progetto si divide quindi in due versioni, una per lo standard Posix ed un altra per lo standard WINAPI.
+Per comodità di programmazione si è optato per la suddivisione dei due scenari: è stata creato un branch per Posix ed uno per WINAPI.
