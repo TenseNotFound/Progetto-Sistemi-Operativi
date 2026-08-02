@@ -42,7 +42,7 @@ int main(int argc, char **argv){
 
     printf("\n      POSIX SERVER RELEASE        \nStartup server...\n");
     fflush(stdout);
-    
+
     port = atoi(argv[1]);
 
 
@@ -107,7 +107,13 @@ int main(int argc, char **argv){
         exit(-1);
     }
 
-    
+    printf("\n==================================================\n         SERVER AVVIATO CON SUCCESSO         \n==================================================\n");
+    printf(" Indirizzo IP : 0.0.0.0 (INADDR_ANY)\n Porta        : %d\n", port);
+    printf(" Backlog      : %d (Coda massima client)\n", BACKLOG);
+    printf(" Per chiudere : CTRL + C\n==================================================\n[*] In attesa di nuove connessioni...\n\n");
+
+    fflush(stdout);
+        
     
 
 
