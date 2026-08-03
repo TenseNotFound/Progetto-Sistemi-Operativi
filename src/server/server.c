@@ -22,16 +22,16 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define BACKLOG 16
 #define MAX_BIND_ATTEMPTS 20
 
 typedef game_info info;
 typedef azioni mosse;
 
-volatile sig_atomic_t timeout = 1;
+volatile sig_atomic_t timeout = 1, kill = 0;
 int port, sem;
 
 void timeout_lobby(int sig);
+void chiusura (int sig);
 
 int main(int argc, char **argv){
 
@@ -83,7 +83,7 @@ int main(int argc, char **argv){
     */
 
  
-    int bound = 0;
+    int bound = 0, ret;
     for (int attempt = 0; attempt < MAX_BIND_ATTEMPTS && !bound; attempt++) {
         server_addr.sin_port = htons(port);
  
@@ -122,10 +122,25 @@ int main(int argc, char **argv){
     struct sigaction sa;
     sa.sa_flags = 0;
     sa.sa_handler = timeout_lobby;
-    sigemptyset(&sa.sa_mask);
 
-    if(sigaction(SIGALRM, &sa, NULL) == -1){
-        perror("Errore nell'installare la sigaction, procedo con l'installazione della sigal");
+    if (sigemptyset(&sa.sa_mask) == -1){
+        perror("Errore nello svuotare la maschera delle segnalazioni");
+        exit(-1);
+    }
+    /*
+    if(sigaddset(&sa.sa_mask, SIGINT) == -1){
+        perror("Errore nell'aggiunta di SIGINT alla maschera");
+        ret++;
+    }
+
+    if(sigaddset(&sa.sa_mask, SIGUSR1) == -1){
+        perror("Errore nell'aggiunta di SIGUSR1 alla maschera");
+        ret++;
+    }
+    */
+
+    if(sigaction(SIGALRM, &sa, NULL) == -1 || ret == 2){
+        perror("Errore nell'installare la sigaction, procedo con l'installazione della signal");
         signal(SIGALRM, timeout_lobby);
     }
 
@@ -139,25 +154,15 @@ int main(int argc, char **argv){
         */
 
     }
-    
-
-
-
-
-    
-
-
-    
-
 
     return 0;
-
-
-
-
 }
 
 
 void timeout_lobby(int sig){
     timeout = 0;
+}
+
+void chiusura (int sig){
+    kill = 1;
 }
