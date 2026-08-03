@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define BACKLOG 16
 #define MAX_BIND_ATTEMPTS 20

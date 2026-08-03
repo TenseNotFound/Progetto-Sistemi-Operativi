@@ -1,5 +1,5 @@
 typedef enum game_info{ // serve poi per capire che mossa/azione è stata fatta/compiuta/subita sul client
-    WELCOME, JOIN, TURN, MOVE, HIT, MISS, ELIMINATED, WIN
+    WELCOME, JOIN, TURN, MOVE, HIT, MISS, ELIMINATED, WIN, MODE
 }game_info;
 
 
