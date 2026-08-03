@@ -1,5 +1,9 @@
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
+
 #define SHIP_NUMBER 5
 #define GRID_SIZE 10
+#define BACKLOG 16
 
 typedef enum game_info{ // serve poi per capire che mossa/azione è stata fatta/compiuta/subita sul client
     WELCOME, JOIN, TURN, MOVE, HIT, MISS, ELIMINATED, WIN, MODE
@@ -31,3 +35,5 @@ typedef struct posizionamento{
     int x,y;
     int orientamento; // 1 -> orizzontale, 0 verticale 
 }posizionamento;
+
+#endif
