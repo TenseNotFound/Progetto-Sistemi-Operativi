@@ -111,7 +111,7 @@ int main() {
 	#elif defined(MODE_TCT)
 	char mod[] = "TCT\n";
 	#else
-	#error "specificare la modalit├á che si desidera giocare"
+	#error "specificare la modalitá che si desidera giocare"
 	#endif
 	/*collegamento e comunicazione con server*/
 	int mes_s = send( ds_socket, mod, strlen(mod), 0 );
