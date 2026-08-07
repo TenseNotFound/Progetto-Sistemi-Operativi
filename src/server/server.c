@@ -29,7 +29,7 @@
 typedef game_info info;
 typedef azioni mosse;
 
-volatile sig_atomic_t timeout = 1, kill = 0;
+volatile sig_atomic_t timeout = 1, shutdown_flag = 0;
 int port;           // eventualmente qua va poi dichiarato il semaforo
 
 void *udp_discovery_port(void *args);
@@ -39,8 +39,10 @@ void *client_thread (void *args);
 int recv_msg(int fd, azioni *msg);
 int send_msg(int fd, azioni *msg);
 void *add_player(int fd);
-player *trova_giocatore(int id); // serve per trovare un giocatore in base al suo id quando si vuole fare una mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
-
+player *trova_giocatore(int id); // serve per trovare un giocatore in base al suo id quando si vuole fare una 
+                                // mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
+ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete
+ssize_t writen(int fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete
 //serve perchè ho bisogno di passare più informazioni al thread, uso quindi una struttura
 typedef struct{
     int client_fd;
@@ -65,6 +67,7 @@ typedef struct{
     int count;
     int next_id;
     int game_started;
+    int active_threads; // serve per tenere traccia di quanti thread client sono attivi, così da poterli chiudere tutti in caso di chiusura del server
     pthread_mutex_t lock;
 } gstate;
 
@@ -73,6 +76,7 @@ static gstate stato = {
     0,  // quanti giocatori sono connessi
     0, // quanti utenti sono già connessi
     0, // 0 -> partita non iniziata, 1 -> partita iniziata
+    0, // inizialmente nessun thread attivo
     PTHREAD_MUTEX_INITIALIZER
 } ;
 
@@ -80,18 +84,19 @@ int main(int argc, char **argv){
 
     if(argc<2){
         printf("Sintassi corretta: %s <pnumber>\n", argv[0]);
-        return 1;
+        return -1;
     }
     
-    if(argv[1] < 5000 || argv[1] >65535){
-        printf("Inserisci un numero di porta valido\n");
-        return 1;
+    port = atoi(argv[1]);
+    if(port < 5000 || port >65535){
+        printf("Inserisci un numero di porta valido nel range 5000-65535\n");
+        return -1;
     }
 
     printf("\n      POSIX SERVER RELEASE        \nStartup server...\n");
     fflush(stdout);
 
-    port = atoi(argv[1]);
+    
 
 
     int llisten = socket(AF_INET, SOCK_STREAM, 0);
@@ -170,24 +175,25 @@ int main(int argc, char **argv){
         perror("Errore nello svuotare la maschera delle segnalazioni");
         exit(-1);
     }
-    /*
-    if(sigaddset(&sa.sa_mask, SIGINT) == -1){
-        perror("Errore nell'aggiunta di SIGINT alla maschera");
-        ret++;
-    }
-
-    if(sigaddset(&sa.sa_mask, SIGUSR1) == -1){
-        perror("Errore nell'aggiunta di SIGUSR1 alla maschera");
-        ret++;
-    }
-    */
 
     if(sigaction(SIGALRM, &sa, NULL) == -1 || ret == 2){
         perror("Errore nell'installare la sigaction, procedo con l'installazione della signal");
         signal(SIGALRM, timeout_lobby);
     }
+    
+    sa.sa_handler = chiusura;
+    
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("Errore nell'installare la sigaction per SIGINT");
+        signal(SIGINT, chiusura);
+    }
+    if (sigaction(SIGTERM, &sa, NULL) == -1) {
+        perror("Errore nell'installare la sigaction per SIGTERM");
+        signal(SIGTERM, chiusura);
+    }
 
     pthread_t udp_thread;
+    
     if(pthread_create(&udp_thread, NULL, udp_discovery_port, &port) != 0){
         perror("Errore nella creazione del thread per la discovery UDP");
         close(llisten);
@@ -203,12 +209,13 @@ int main(int argc, char **argv){
     alarm(30);
 
     //lobby con timeout
-    while(timeout){
+    while(timeout && !shutdown_flag){
         struct sockaddr_in client_addr;
         socklen_t addrlen = sizeof(client_addr);
 
-        int client = accept(llisten, (struct sockaddr *)&client_addr, &addrlen);
+        int client = accept(llisten, (struct sockaddr *)&client_addr, &addrlen); // bloccante
         if(client == -1){
+            if(errno == EINTR) continue; // se l'errore è dovuto a una segnalazione, riprovo
             perror("Errore nell'accept() in ascolto del client (server)");
             continue;
         }
@@ -234,36 +241,75 @@ int main(int argc, char **argv){
         }
         pthread_detach(tid);
 
+        pthread_mutex_lock(&stato.lock);
+        //stato.active_threads++; -> serve fix
+        pthread_mutex_unlock(&stato.lock);
     }
 
     close(llisten);
-
+    /*
+          printf("\n[*] Chiusura del server in corso...\n");
+    fflush(stdout);
+ 
+    pthread_mutex_lock(&stato.lock);
+ 
+    // sblocco eventuali recv()/read() bloccate nei thread client. shutdown()
+    // e' preferibile a close() qui: chiudere un fd usato da un altro thread
+    // e' una race condition, shutdown() invece sveglia in sicurezza chi e'
+    // bloccato in lettura senza invalidare subito il descrittore.
+    player *p = stato.head;
+    while (p != NULL) {
+        shutdown(p->socket, SHUT_RDWR);
+        p = p->next;
+    }
+ 
+    // aspetto che i thread client terminino, con un timeout di sicurezza
+    // per non restare bloccati per sempre se qualcosa va storto
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec += 5;
+    while (stato.active_threads > 0) {
+        if (pthread_cond_timedwait(&stato.cv, &stato.lock, &ts) == ETIMEDOUT) {
+            printf("[*] Timeout in attesa dei thread client, chiudo comunque\n");
+            break;
+        }
+    }
+ 
+    // libero la lista dei giocatori e chiudo eventuali socket rimasti aperti
+    player *cur = stato.head;
+    while (cur != NULL) {
+        player *next = cur->next;
+        close(cur->socket);
+        free(cur);
+        cur = next;
+    }
+    stato.head = NULL;
+ 
+    pthread_mutex_unlock(&stato.lock);
+    pthread_mutex_destroy(&stato.lock);
+    pthread_cond_destroy(&stato.cv);
+ 
+    printf("[*] Server chiuso correttamente\n");
+ 
+    */
     return 0;
 }
 
-
-void timeout_lobby(int sig){
-    timeout = 0;
-}
-
-void chiusura (int sig){
-    kill = 1;
-}
 
 void *client_thread(void *args){
     client_arg *cargs = (client_arg *)args;
 
     //recupero ip e porta del client collegato
     char *ip = inet_ntoa(cargs->client_addr.sin_addr);
-    int port = ntohs(cargs->client_addr.sin_port);
+    int portc = ntohs(cargs->client_addr.sin_port);
 
-    printf("Nuova connessione:\n     client collegato %s:%d \n", ip, port);
+    printf("Nuova connessione:\n     client collegato %s:%d \n", ip, portc);
     fflush(stdout);
 
     azioni msg;
 
     if(recv_msg(cargs->client_fd, &msg) != 0 || msg.type != JOIN){
-        printf("(Server) handshake non validato per %s:%d\n", ip, port);
+        printf("(Server) handshake non validato per %s:%d\n", ip, portc);
         free(cargs);
         close(cargs->client_fd);
         return NULL;
@@ -274,7 +320,7 @@ void *client_thread(void *args){
     player *me = add_player(cargs->client_fd);
     if (me == NULL) {
         pthread_mutex_unlock(&stato.lock);
-        printf("(Server) Impossibile creare struct player per %s:%d\n", ip, port);
+        printf("(Server) Impossibile creare struct player per %s:%d\n", ip, portc);
         free(cargs);
         close(cargs->client_fd);
         return NULL;
@@ -289,13 +335,13 @@ void *client_thread(void *args){
     welcome_msg.player_id = assignet_id;
 
     if(send_msg(cargs->client_fd, &welcome_msg) == -1){
-        printf("Errore nell'invio del messaggio di benvenuto a %s:%d\n", ip, port);
+        printf("Errore nell'invio del messaggio di benvenuto a %s:%d\n", ip, portc);
         free(cargs);
         close(cargs->client_fd);
         return NULL;
     }
 
-    printf("Giocatore %d connesso da %s:%d\n", assignet_id, ip, port);
+    printf("Giocatore %d connesso da %s:%d\n", assignet_id, ip, portc);
     fflush(stdout);
 
 
@@ -304,6 +350,10 @@ void *client_thread(void *args){
     */
 
 
+
+    pthread_mutex_lock(&stato.lock);
+    //stato.active_threads--; -> fix
+    pthread_mutex_unlock(&stato.lock);
 
     free(cargs);
     close(cargs->client_fd);
@@ -321,7 +371,8 @@ int send_msg(int fd, azioni *msg){
     packet.x = htonl(msg->x);
     packet.y = htonl(msg->y);
 
-    ssize_t n = write(fd, &packet, sizeof(azioni));
+    ssize_t n = writen(fd, &packet, sizeof(azioni));
+    // c'è rischio che in TCP si scrivano meno byte di quelli richiesti,
 
     if(n != (ssize_t)(sizeof(azioni))){
         return -1;
@@ -332,7 +383,9 @@ int send_msg(int fd, azioni *msg){
 int recv_msg(int fd, azioni *msg){
     azioni packet;
 
-    ssize_t n = read(fd, &packet, sizeof(azioni));
+    ssize_t n = readn(fd, &packet, sizeof(azioni));
+    // c'è rischio che in TCP si ricevano meno byte di quelli richiesti, 
+    // quindi bisogna fare un ciclo finchè non si ricevono tutti i byte
 
     if(n == (ssize_t)(sizeof(azioni))){
 
@@ -349,6 +402,48 @@ int recv_msg(int fd, azioni *msg){
     }
 
     return -1;
+}
+
+ssize_t readn(int fd, void *buf, size_t n){
+    /*
+        QUESTA FUNZIONE SERVE PER IL CONTROLLO
+        DELL'AVVENUTA LETTURA DI TUTTI I DATI IN RETE
+        SE NE LEGGO DI MENO CONITNUO A LEGGERE ESCLUDENDO I VARI CASI
+    */
+    size_t left = n;
+    char *p = (char *)buf;
+
+    while(left >0){
+        ssize_t r = read(fd, p, left);
+        if(r<0){
+            if(errno == EINTR) continue;
+            return -1;
+        }
+        if (r == 0) return (ssize_t)(n - left); // il client ha chiuso la connessione, analogo chiusura PIPE
+        left -= (size_t)r;
+        p += r;
+    }
+    return (ssize_t)n; // se arrivo qui ho letto tutti i byte richiesti e comunico con n
+}
+
+ssize_t writen(int fd, const void *buff, size_t n){
+    /*
+        QUESTA FUNZIONE SERVE PER IL CONTROLLO
+        DELL'AVVENUTA SCRITTURA DI TUTTI I DATI IN RETE
+        SE NE SCRIVO DI MENO CONITNUO A SCRIVERE ESCLUDENDO I VARI CASI
+    */
+    size_t left = n;
+    const char *p = (const char *)buff;
+    while(left<0){
+        size_t w = wrtie(fd, p, left);
+        if(w<0){
+            if(errno == EINTR)continue; // scrittura bloccata da segnalazione, riprovo
+            return -1;
+        } if(w == 0) return (ssize_t)(n - left); // il client ha chiuso la connessione, analogo chiusura PIPE
+        left -= (size_t)w;
+        p += w;
+    }
+    return (ssize_t)n; // se arrivo qui ho scritto tutti i byte richiesti e comunico con n
 }
 
 void *add_player(int fd){
@@ -411,14 +506,21 @@ void *udp_discovery_port(void *args){
     }
 
     char buffer[256], reply[256];
-    buffer[0] = '\0';
+    
 
-    while(1){
+    while(!shutdown_flag){
+        buffer[0] = '\0';
         int n = recvfrom(socket_fd, buffer, sizeof(buffer)-1, 0, (struct sockaddr *)&client_addr, &client_addr_len);
         if(n > 0 && strcmp(buffer, "DISCOVER") == 0){
-            snprintf(reply, sizeof(reply), "%d", porta);
-            sendto(socket_fd, reply, strlen(reply), 0, (struct sockaddr *)&client_addr, client_addr_len);
+            buffer[n] = '\0';
+            if(strcmp(buffer, "DISCOVER") == 0){
+                snprintf(reply, sizeof(reply), "%d", porta);
+                sendto(socket_fd, reply, strlen(reply), 0, (struct sockaddr *)&client_addr, client_addr_len);
+                printf("Ricevuta richiesta di discovery da %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+                fflush(stdout);
+            }
         } else if(n < 0){
+            if(errno == EINTR) continue; // se l'errore è dovuto a una segnalazione, riprovo
             perror("Errore nella ricezione del messaggio UDP");
         } else {
             continue; // messaggio non valido, ignoro
@@ -427,4 +529,16 @@ void *udp_discovery_port(void *args){
 
     close(socket_fd);
     pthread_exit(NULL);
+}
+
+/*
+    INSIEME DELLE FUNZIONI DEDITE ALLA RICEZIONE DI SEGNALAZIONI
+*/
+
+void timeout_lobby(int sig){
+    timeout = 0;
+}
+
+void chiusura (int sig){
+    shutdown_flag = 1;
 }
