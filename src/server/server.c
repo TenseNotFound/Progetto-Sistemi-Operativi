@@ -242,7 +242,7 @@ int main(int argc, char **argv){
         pthread_detach(tid);
 
         pthread_mutex_lock(&stato.lock);
-        //stato.active_threads++; -> serve fix
+        stato.active_threads++;
         pthread_mutex_unlock(&stato.lock);
     }
 
@@ -352,7 +352,7 @@ void *client_thread(void *args){
 
 
     pthread_mutex_lock(&stato.lock);
-    //stato.active_threads--; -> fix
+    stato.active_threads--;
     pthread_mutex_unlock(&stato.lock);
 
     free(cargs);
