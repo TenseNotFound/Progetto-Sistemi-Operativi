@@ -1,4 +1,6 @@
-//#include "../../protocollo/protocollo.h"
+#include "../../protocollo/protocollo.h"
+#include "../../gui/gui.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -124,4 +126,5 @@ int main() {
 	if ( sscanf( buffer, "WELCOME %d", &mio_id) != 1 ) {perror("errore"); return -6;}
 	printf("%s\n", buffer);
 	piazzamento_navi();
-return 0;}
+return 0;
+}
