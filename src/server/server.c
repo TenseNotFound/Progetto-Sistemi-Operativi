@@ -434,8 +434,8 @@ ssize_t writen(int fd, const void *buff, size_t n){
     */
     size_t left = n;
     const char *p = (const char *)buff;
-    while(left<0){
-        size_t w = wrtie(fd, p, left);
+    while(left > 0){ // > e non < perchè è unisgned e non può essere negativo
+        size_t w = write(fd, p, left);
         if(w<0){
             if(errno == EINTR)continue; // scrittura bloccata da segnalazione, riprovo
             return -1;
@@ -464,6 +464,7 @@ void *add_player(int fd){
     new_player->next = stato.head;
     stato.head = new_player;
     stato.count++;
+    memset(new_player->griglia, 0, sizeof(new_player->griglia)); // pulizia della griglia del giocatore
 
     return new_player;
 }
