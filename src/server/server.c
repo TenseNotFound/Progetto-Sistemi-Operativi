@@ -22,10 +22,6 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define MAX_BIND_ATTEMPTS 20
-#define GRID 10
-#define SHIP_NUMBER 5
-
 typedef game_info info;
 typedef azioni mosse;
 
@@ -54,7 +50,7 @@ typedef struct players{
     int id;
     int socket;
     pthread_t thread;
-    char griglia[GRID][GRID];
+    char griglia[GRID_SIZE][GRID_SIZE];
     int alive;
     int navi_rimaste;
     int sem_id;
@@ -132,7 +128,7 @@ int main(int argc, char **argv){
 
  
     int bound = 0;
-    for (int attempt = 0; attempt < MAX_BIND_ATTEMPTS && !bound; attempt++) {
+    for (int attempt = 0; attempt < TENTATIVI && !bound; attempt++) {
         server_addr.sin_port = htons(port);
  
         if (bind(llisten, (struct sockaddr *)&server_addr, sizeof(server_addr)) == 0) {
@@ -488,7 +484,8 @@ void *udp_discovery_port(void *args){
     int socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if(socket_fd < 0){
         perror("Errore nella creazione del socket UDP");
-        pthread_exit(NULL);}
+        pthread_exit(NULL);
+    }
     struct sockaddr_in udp_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
 
@@ -497,7 +494,7 @@ void *udp_discovery_port(void *args){
     memset(&client_addr, 0, sizeof(client_addr));
 
     udp_addr.sin_family = AF_INET;
-    udp_addr.sin_port = htons(9999); // porta di discovery
+    udp_addr.sin_port = htons(DISCOVERY_PORT); // porta di discovery
     udp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if(bind(socket_fd, (struct sockaddr *)&udp_addr, sizeof(udp_addr))<0){
@@ -506,7 +503,7 @@ void *udp_discovery_port(void *args){
         pthread_exit(NULL);
     }
 
-    char buffer[256], reply[256];
+    char buffer[BUFFER_SIZE], reply[BUFFER_SIZE]; // dimensioni allineate con il client, definite nel protocollo.h
     
 
     while(!shutdown_flag){

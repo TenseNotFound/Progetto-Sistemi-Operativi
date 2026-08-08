@@ -5,13 +5,14 @@
 #include <stdlib.h>
 
 
-void init_board();
+void gui_init(int flag);
+char *init_board();
 void draw_board(char grid[GRID_SIZE][GRID_SIZE]);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);
+void server_connected(char *ip, int port, int id);
 
-void clear_screen();
+void clean_screen();
 
-void gui_init();
 void close_game();
 
 #endif

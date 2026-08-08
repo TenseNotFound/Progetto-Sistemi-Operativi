@@ -3,23 +3,47 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void gui_init(){
-    clear_screen();
-    printf("Benvenuto nel gioco della battaglia navale!\n");
-    printf("In attesa di connessione al server...\n");
+void gui_init(int flag){
+    clean_screen();
+
+    if(flag == 1){
+        printf("[!] Modalità connessione automatica attiva. \n[*] Startup in corso...\n");
+    }
+    
+    printf("====================================================================\n");
+    printf("                   BATTAGLIA NAVALE - CLIENT v1.0                   \n");
+    printf("====================================================================\n");
+    printf(" Progetto Sistemi Operativi - A.A. 2025/2026                        \n");
+    printf(" Realizzato da:                                                     \n");
+    printf("  * Lorenzo Tarantino (TenseNotFound)                               \n");
+    printf("  * Leonardo (lrcicalini)                                           \n");
+    printf(" Link alla repository:                                              \n");
+    printf("  https://github.com/TenseNotFound/Progetto-Sistemi-Operativi       \n");
+    printf("====================================================================\n\n");
+    
+    printf("Benvenuto nel gioco battaglia navale!\n");
+    printf("[*] In attesa della connessione con il server...\n\n");
+    
     fflush(stdout);
 }
 
-void init_board(){
+void server_connected(char *ip, int port, int id){
+    printf("[*] Connessione stabilita con il server %s:%d\n", ip, port);
+    printf("[*] Il tuo ID è: %d\n", id);
+    fflush(stdout);
+}
+
+char *init_board(){
     char grid[GRID_SIZE][GRID_SIZE];
     cleanup_board(grid);
     draw_board(grid);
+    return grid;
 }
 
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]){
     for(int i = 0; i<GRID_SIZE; i++){
         for(int j = 0; j<GRID_SIZE; j++){
-            grid[i][j] = "~";
+            grid[i][j] = '~';
         }
     }
 }

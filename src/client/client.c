@@ -1,19 +1,10 @@
+/*
+        CLIENT POSIX RELEASE
+*/
+
 #include "../../protocollo/protocollo.h"
 #include "../../gui/gui.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-
-#if defined(Windows)
-#include <winsock2.h>
-#include <windows.h>
-#include <ws2tcpip.h>
-
-#else
-#include <sys/select.h>
-#include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
@@ -27,104 +18,360 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#endif
 
-#define BUFFER_SIZE 256
-#define IP "127.0.0.1"
-//#define mod 0           // rimuovere poi questa riga
-/* definire comportamento fflush(stdout) per printf() */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
 
-typedef struct {
-	int riga;
-	int colonna;
-	char direzione;
-	} Nave;
 
-bool validazione( bool board[10][10], int x, int y, char orientazione, int dimensione_nave ) {
+int discovery_server(char *ip, int *port); // serve qualora non passo argomenti in esecuzione o qualora il server non sia raggiungibile con i parametri specificati
+int recv_msg(int fd, azioni *msg);
+int send_msg(int fd, azioni *msg);
+ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete
+ssize_t writen(int fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete
+void fflush_stdin(void); // serve per pulire il buffer di input, così da evitare che rimangano caratteri in stdin, visto che fflush(stdin) non esiste, lo creo io
+int piazzamento_navi (int socket);
+int invio_navi(int socket, posizionamento *navi);
+void udp_handler(int sig);
+
+
+struct posizionamento Nave;
+int *port;
+
+
+// la validazione viene fatta dal server
+/*
+	bool validazione( bool board[10][10], int x, int y, char orientazione, int dimensione_nave ) {
 
     int delta_riga, delta_colonna, r, c;
-	if ( orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O' ) {printf("orientazione scelta non valida\n");
-													return false; }
+	if ( orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O' ) {
+		printf("orientazione scelta non valida\n");
+		return false; 
+	}
 	else if ( orientazione == 'N' ) { delta_riga = -1; delta_colonna = 0;}
 	else if ( orientazione == 'S' ) { delta_riga = 1; delta_colonna = 0;}
 	else if ( orientazione == 'E' ) { delta_riga = 0; delta_colonna = 1;}
 	else if ( orientazione == 'O' ) { delta_riga = 0; delta_colonna = -1;}
 	for ( int i = 0; i < dimensione_nave; i++ ) {
-	r = x + i * delta_riga;
-	c = y + i * delta_colonna;
-	if ( r < 0 || r >= 10 || c < 0 || c >= 10 ) { return false;}
-	else if ( board[r][c] == true ) { return false;} }
+		r = x + i * delta_riga;
+		c = y + i * delta_colonna;
+		if ( r < 0 || r >= 10 || c < 0 || c >= 10 ) { return false;}
+		else if ( board[r][c] == true ) { return false;} 
+	}
 	for ( int i = 0; i < dimensione_nave; i++ ) {
-	    r = x + i * delta_riga;
-        c = y + i * delta_colonna;
-	    board[r][c] = true; }
+		r = x + i * delta_riga;
+		c = y + i * delta_colonna;
+		board[r][c] = true; 
+	}
 	return true;
 }
+*/
 
-int piazzamento_navi () {
+int main(int argc, char **argv) {
 
-	bool board[10][10] = {false}; /* non serve impostare tutto a false, ci pensa il compilatore in quanto la matrice viene riempita con 0, ovvero
-					il valore booleano corrispondente a false */
-	int dimensioni_navi[5] = { 5, 4, 3, 3, 2};
-	const char *nomi_navi[5] = {"Portaerei", "Corazzata", "Incrociatore", "Incrociatore", "Cacciatorpediniere"};
-	Nave navi_validate[5];
-	bool valid;
+	if(argc == 1){
+		printf("Modalità di connessione automatica attiva. \n Avvio il client...\n");
+		char *ip;
+		if(discovery_server(ip, port) == -1){
+			printf("Errore nel discovery del server, inserisci manualmente ip e porta\n Sintassi: %s <IP> <port>\n", argv[0]);
+			return -1;
+		}
+		fflush(stdout);
+
+	} else if(argc <3){
+		printf("Sintassi corretta: %s <IP> <port>\n", argv[0]);
+		return -1;
+	} else {
+		port = atoi(argv[2]);
+		if(port < 5000 || port >65535){
+			printf("Inserisci un numero di porta valido nel range 5000-65535\n");
+			return -1;
+		}
+	}
+
+	// TODO: fallback qualora port e ip non siano corretti
+	gui_init(argc);
+
+	char *griglia = init_board();
+
+	struct sockaddr_in server_addr;
+	bzero(&server_addr, sizeof(server_addr));
+	
+	int socketfd, ip, mio_id;
+
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(port);
+
+	char buffer[BUFFER_SIZE];
+
+	socketfd = socket(AF_INET, SOCK_STREAM, 0);
+	if(socketfd == -1){
+		perror("errore nella creazione del socket");
+		return -1;
+	}
+
+	if(inet_aton(argv[1], &server_addr.sin_addr) <= 0){
+		perror("errore nell'indirizzo IP");
+		close(socketfd);
+		return -1;
+	}
+
+	if(connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1){
+		perror("errore nella connessione al server");
+		close(socketfd);
+		return -1;
+	}
+
+	//procedimento di handshake con il server
+	azioni msg;
+	msg.type = JOIN;
+	if(send_msg(socketfd, &msg) == -1){
+		perror("errore nell'invio del messaggio di JOIN");
+		close(socketfd);
+		return -1;
+	}
+
+	azioni welcome_msg;
+	if(recv_msg(socketfd, &welcome_msg) == -1){
+		perror("errore nella ricezione del messaggio di WELCOME");
+		close(socketfd);
+		return -1;
+	}
+
+	if(welcome_msg.type != WELCOME){
+		printf("messaggio di benvenuto non valido\n");
+		close(socketfd);
+		return -1;
+	}
+
+	// ok handshake, il server mi ha assegnato un id
+	mio_id = welcome_msg.player_id;
+	server_connected(argv[1], port, mio_id);
+	char *griglia = init_board();
+
+
+	piazzamento_navi(socketfd);
+	
+	
+	close(socketfd);
+	return 0;
+}
+
+
+int send_msg(int fd, azioni *msg){
+    azioni packet;
+
+    //carico i dati in rete
+    packet.type = htonl(msg->type);
+    packet.player_id = htonl(msg->player_id);
+    packet.target_id = htonl(msg->target_id);
+    packet.x = htonl(msg->x);
+    packet.y = htonl(msg->y);
+
+    ssize_t n = writen(fd, &packet, sizeof(azioni));
+    // c'è rischio che in TCP si scrivano meno byte di quelli richiesti,
+
+    if(n != (ssize_t)(sizeof(azioni))){
+        return -1;
+    }
+    return 0;
+}
+
+int recv_msg(int fd, azioni *msg){
+    azioni packet;
+
+    ssize_t n = readn(fd, &packet, sizeof(azioni));
+    // c'è rischio che in TCP si ricevano meno byte di quelli richiesti, 
+    // quindi bisogna fare un ciclo finchè non si ricevono tutti i byte
+
+    if(n == (ssize_t)(sizeof(azioni))){
+
+        //scarico i dati da rete
+        msg->type = ntohl(packet.type);
+        msg->player_id = ntohl(packet.player_id);
+        msg->target_id = ntohl(packet.target_id);
+        msg->x = ntohl(packet.x);
+        msg->y = ntohl(packet.y);
+
+        return 0;
+    } else if(n == 0){
+        return -1;
+    }
+
+    return -1;
+}
+
+/*
+	LE FUNZIONI readn E writen SONO LE STESSE CHE VENGONO 
+	UTILIZZATE IN server.c, FORSE VERRANNO POI MIGRATE
+	IN UN FILE COMUNE PER CHIAREZZA
+*/
+
+ssize_t readn(int fd, void *buf, size_t n){
+    /*
+        QUESTA FUNZIONE SERVE PER IL CONTROLLO
+        DELL'AVVENUTA LETTURA DI TUTTI I DATI IN RETE
+        SE NE LEGGO DI MENO CONITNUO A LEGGERE ESCLUDENDO I VARI CASI
+    */
+    size_t left = n;
+    char *p = (char *)buf;
+
+    while(left >0){
+        ssize_t r = read(fd, p, left);
+        if(r<0){
+            if(errno == EINTR) continue;
+            return -1;
+        }
+        if (r == 0) return (ssize_t)(n - left); // il client ha chiuso la connessione, analogo chiusura PIPE
+        left -= (size_t)r;
+        p += r;
+    }
+    return (ssize_t)n; // se arrivo qui ho letto tutti i byte richiesti e comunico con n
+}
+
+ssize_t writen(int fd, const void *buff, size_t n){
+    /*
+        QUESTA FUNZIONE SERVE PER IL CONTROLLO
+        DELL'AVVENUTA SCRITTURA DI TUTTI I DATI IN RETE
+        SE NE SCRIVO DI MENO CONITNUO A SCRIVERE ESCLUDENDO I VARI CASI
+    */
+    size_t left = n;
+    const char *p = (const char *)buff;
+    while(left > 0){ // > e non < perchè è unisgned e non può essere negativo
+        size_t w = write(fd, p, left);
+        if(w<0){
+            if(errno == EINTR)continue; // scrittura bloccata da segnalazione, riprovo
+            return -1;
+        } if(w == 0) return (ssize_t)(n - left); // il client ha chiuso la connessione, analogo chiusura PIPE
+        left -= (size_t)w;
+        p += w;
+    }
+    return (ssize_t)n; // se arrivo qui ho scritto tutti i byte richiesti e comunico con n
+}
+
+void fflush_stdin(void){
+	int c;
+	while((c = getchar()) != '\n' && c != EOF);
+}
+
+int piazzamento_navi (int socket) {
+
+	posizionamento posizioni_navi[SHIP_NUMBER];
 	int x, y;
 	char orientazione;
-	char buffer[40];
-	int offset = 0;
-	for ( int i = 0; i < 5; i++) {
-		printf("Piazzare la nave %s, di dimensione %d, lungo una delle direzioni possibili: N S E O\n", nomi_navi[i], dimensioni_navi[i]);
-		do {
-			scanf( "%d %d %c", &x, &y, &orientazione);
-			fflush(stdin);
-			valid = validazione( board, x, y, orientazione, dimensioni_navi[i]);
-			if ( !valid) { printf("Piazzamento della nave %s invalido, riprovare\n", nomi_navi[i]);}
-        } while ( !valid);
-		        navi_validate[i].riga = x;
-                navi_validate[i].colonna = y;
-                navi_validate[i].direzione = orientazione;
-		offset += snprintf( buffer + offset, sizeof(buffer) - offset, "%d %d %c ",
-				navi_validate[i].riga,
-				navi_validate[i].colonna,
-				navi_validate[i].direzione); }
-	printf("%s", buffer ); return 0; }
 
-		/*scrivere codice per mandare array buffer al server*/
+	for (int i = 0; i < SHIP_NUMBER; i++ ) {
+		fflush_stdin();
+		printf("Inserisci le coordinate della nave %s (dimensione %d) e l'orientamento (N,S,E,O):\n", ship_tipe[i].name, ship_tipe[i].size);
+		while(scanf("%d %d %c", &x, &y, &orientazione)!= 3) printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento>\n"); flush_stdin();
+		posizioni_navi[i].index = i;
+		posizioni_navi[i].x = x;
+		posizioni_navi[i].y = y;
+		posizioni_navi[i].orientation = orientazione;
 
-int main() {
-    /*gestione socket*/
-	struct sockaddr_in my_addr;
-	int ds_socket, ip, connessione, mio_id;
+		// aggiungere la parte che aggiorna la griglia col posizionamento
+
+		printf("Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_tipe[i].name, x, y, orientazione);
+		fflush(stdout);
+	}
+
+	if(invio_navi(socket, posizioni_navi) == -1){
+		perror("errore nell'invio delle posizioni delle navi");
+		return -1;
+	}
+
+	return 0;
+}
+
+int invio_navi(int socket, posizionamento *navi){
+	for(int i = 0; i< SHIP_NUMBER; i++){
+		posizionamento p;
+		p.index = htonl(navi[i].index);
+		p.x = htonl(navi[i].x);
+		p.y = htonl(navi[i].y);
+		p.orientation = navi[i].orientation;
+		if(writen(socket, &p, sizeof(posizionamento)) != sizeof(posizionamento)){
+			return -1;
+		}
+	}
+	return 0;
+}
+
+int discovery_server(char *ip, int *port){
+
+	int sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if(sock == -1){
+		perror("Errore nell'apertura del socket per l'UDP");
+		return -1;
+	}
+
+	if(setsockopt(sock, SOL_SOCKET, SO_BROADCAST, 1 /*abilitato o meno*/, sizeof(int))<0){
+		perror("Errore nell'abilitare la modalità broadcast sul socket di discovery");
+		close(sock);
+		return -1;
+	}
+
+	struct sockaddr_in broadcast;
+	broadcast.sin_family = AF_INET;
+	broadcast.sin_port = htons(DISCOVERY_PORT);
+	broadcast.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+
+	if(sendto(sock, DISCOVER, strlen(DISCOVER), 0, (struct sockaddr *)&broadcast, sizeof(broadcast))<0){
+		perror("Errore nell'inviare il payload di discovery");
+		close(sock);
+		return -1;
+	}
+
+	printf("[*] Richiesta di discovery inviata con successo (broadcast). \n In attesa di riscontro dal server...\n");
+	fflush(stdout);
+
+
+	// timeout per il listen broadcast
+
+	struct sigaction sa;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sa.sa_handler = udp_handler;
+    
+    if (sigaction(SIGALRM, &sa, NULL) == -1) {
+        perror("Errore sigaction");
+        close(sock);
+        return -1;
+    }
+
+	alarm(TIMEOUT);
+
+	struct sockaddr_in ricezione;
 	char buffer[BUFFER_SIZE];
-	/*settaggio socket*/
-	my_addr.sin_family = AF_INET;
-        my_addr.sin_port = htons(10000);
-	ds_socket = socket( AF_INET, SOCK_STREAM, IPPROTO_TCP );
-	if ( ds_socket == -1) { perror("errore"); return -1;}
-	ip = inet_pton( AF_INET, IP , &my_addr.sin_addr );
-	if ( ip == 0 || ip == -1) { perror("errore"); return -2;}
-	/*connessione socket*/
-	connessione = connect( ds_socket, (struct sockaddr *) &my_addr, sizeof(struct sockaddr_in));
-	if ( connessione == -1) {perror("errore"); return -3;}
-	/*definizione modalit├á di gioco*/
-	#if defined(MODE_1vs1)
-	char mod[] = "1vs1\n";
-	#elif defined(MODE_TCT)
-	char mod[] = "TCT\n";
-	#else
-	#error "specificare la modalitá che si desidera giocare"
-	#endif
-	/*collegamento e comunicazione con server*/
-	int mes_s = send( ds_socket, mod, strlen(mod), 0 );
-	if ( mes_s == -1) {perror("errore"); return -4;}
-	memset( buffer, 0, sizeof(buffer));
-	int mes_r = recv( ds_socket, buffer, sizeof(buffer)-1, 0);
-	if ( mes_r == -1) {perror("errore"); return -5;}
-	else if ( mes_r == 0) {printf("il server ha chiuso la connessione\n"); return 0;}
-	buffer[mes_r] = '\0';
-	if ( sscanf( buffer, "WELCOME %d", &mio_id) != 1 ) {perror("errore"); return -6;}
-	printf("%s\n", buffer);
-	piazzamento_navi();
-return 0;
+
+	ssize_t dim = sizeof(ricezione);
+
+	int n = recvfrom(sock, buffer,sizeof(buffer) -1 , 0, (struct sockaddr *)&ricezione, &dim);
+
+	alarm(0);
+
+	if(n < 0){
+        if(errno == EINTR){
+            printf("Timeout: Nessun server trovato nella rete in %d secondi\n", TIMEOUT);
+        } else {
+            perror("recvfrom() errore");
+        }
+        close(sock);
+        return -1;
+    }
+
+	buffer[n] = '\0';
+    strncpy(ip, inet_ntoa(ricezione.sin_addr), 16);
+    ip[15] = '\0'; // Terminatore di sicurezza
+
+    *port = atoi(buffer);
+
+    printf("[*] Server trovato con successo!\n[*] In ascolto su %s:%d\n", ip, *port);
+
+    close(sock);
+    return 0;	
+
+
+
 }
