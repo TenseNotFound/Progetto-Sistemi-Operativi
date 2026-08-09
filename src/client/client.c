@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
 
 	if(argc == 1){
 		auto_mode = true;
-		if(discovery_server(ip_buf, port) == -1){
+		if(discovery_server(ip_buf, &port) == -1){
 			printf("Errore nel discovery del server, inserisci manualmente ip e porta\n Sintassi: %s <IP> <port>\n", argv[0]);
 			return -1;
 		}
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
 	struct sockaddr_in server_addr;
 	bzero(&server_addr, sizeof(server_addr));
 	
-	int socketfd, ip, mio_id;
+	int socketfd, mio_id;
 
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
@@ -129,12 +129,12 @@ int main(int argc, char **argv) {
 	server_connected(ip_buf, port, -1);
 
 	char username[USERNAME];
-	getUsername(username, sizeof(USERNAME));
+	getUsername(username, USERNAME);
 
 	//procedimento di handshake con il server
 	azioni msg;	
 	bzero(&msg, sizeof(msg));
-	strncpy(username, msg.username, USERNAME-1);
+	strncpy(msg.username, username, USERNAME-1);
 	msg.username[USERNAME -1] = '\0';
 	msg.type = JOIN;
 	if(send_msg(socketfd, &msg) == -1){
@@ -294,7 +294,7 @@ ssize_t writen(int fd, const void *buff, size_t n){
     size_t left = n;
     const char *p = (const char *)buff;
     while(left > 0){ // > e non < perchè è unisgned e non può essere negativo
-        size_t w = write(fd, p, left);
+        ssize_t w = write(fd, p, left);
         if(w<0){
             if(errno == EINTR)continue; // scrittura bloccata da segnalazione, riprovo
             return -1;
@@ -437,7 +437,7 @@ int discovery_server(char *ip, int *port){
 
 }
 
-void udp_handlet(int sig){
+void udp_handler(int sig){
 	// serve solo per sbloccare la recvfrom dal timeout in udp per evitare i blocchi
 	(void)sig;
 }

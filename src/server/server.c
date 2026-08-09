@@ -174,7 +174,7 @@ int main(int argc, char **argv){
         exit(-1);
     }
 
-    if(sigaction(SIGALRM, &sa, NULL) == -1 || ret == 2){
+    if(sigaction(SIGALRM, &sa, NULL) == -1){
         perror("Errore nell'installare la sigaction, procedo con l'installazione della signal");
         signal(SIGALRM, timeout_lobby);
     }
@@ -231,17 +231,22 @@ int main(int argc, char **argv){
 
         pthread_t tid;
 
+        pthread_mutex_lock(&stato.lock);
+        stato.active_threads++;
+        pthread_mutex_unlock(&stato.lock);
+
         if(pthread_create(&tid, NULL, client_thread, cargs) != 0){
             perror("Errore nella creazione del thread di gestione associato al client connesso");
+            pthread_mutex_lock(&stato.lock);
+            stato.active_threads--;
+            pthread_mutex_unlock(&stato.lock);
             close(client);
             free(cargs);
             continue;
         }
         pthread_detach(tid);
 
-        pthread_mutex_lock(&stato.lock);
-        stato.active_threads++;
-        pthread_mutex_unlock(&stato.lock);
+        
     }
 
     close(llisten);
@@ -440,7 +445,7 @@ ssize_t writen(int fd, const void *buff, size_t n){
     size_t left = n;
     const char *p = (const char *)buff;
     while(left > 0){ // > e non < perchè è unisgned e non può essere negativo
-        size_t w = write(fd, p, left);
+        ssize_t w = write(fd, p, left);
         if(w<0){
             if(errno == EINTR)continue; // scrittura bloccata da segnalazione, riprovo
             return -1;
@@ -460,7 +465,7 @@ void *add_player(int fd, char *username){
     }
 
     new_player->id = stato.next_id++;
-    strncpy(username, new_player->username, USERNAME -1);
+    strncpy(new_player->username, username, USERNAME -1);
     new_player->username[USERNAME-1] = '\0';
     new_player->socket = fd;
     new_player->alive = 1;
@@ -471,8 +476,11 @@ void *add_player(int fd, char *username){
     new_player->next = stato.head;
     stato.head = new_player;
     stato.count++;
-    bzero(&new_player->griglia, sizeof(new_player->griglia));
-
+    for(int i = 0; i < GRID_SIZE; i++){
+        for(int j = 0; j < GRID_SIZE; j++){
+            new_player->griglia[i][j] = '~';
+        }
+    }
     return new_player;
 }
 
