@@ -9,6 +9,7 @@
 #define TIMEOUT 5
 #define BUFFER_SIZE 256
 #define TENTATIVI 20 // per la ricerca della porta
+#define USERNAME 17
 
 typedef enum game_info{ // serve poi per capire che mossa/azione è stata fatta/compiuta/subita sul client
     WELCOME, JOIN, TURN, MOVE, HIT, MISS, ELIMINATED, WIN, MODE
@@ -20,6 +21,7 @@ typedef struct azioni{ // mi definisce la mossa
     int player_id;
     int target_id;
     int x,y; // posizione nave da colpire
+    char username[USERNAME];
 } azioni;
 
 typedef struct posizionamento{ // mi definisce la nave
@@ -35,8 +37,8 @@ typedef struct navi{
 } nave;
 
 static const nave ship_tipe[SHIP_NUMBER] = {
-    {"Portaerei", 5 },
-    {"Corazzata", 4 },
+    {"Portaerei", 5},
+    {"Corazzata", 4},
     {"Incrociatore", 3},
     {"Sottomarino", 3},
     {"Cacciatorpediniere", 2}

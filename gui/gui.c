@@ -2,11 +2,15 @@
 #include "../protocollo/protocollo.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
-void gui_init(int flag){
+static char grid[GRID_SIZE][GRID_SIZE];
+static char target_grid[GRID_SIZE][GRID_SIZE];
+
+void gui_init(bool flag){
     clean_screen();
 
-    if(flag == 1){
+    if(flag){
         printf("[!] Modalità connessione automatica attiva. \n[*] Startup in corso...\n");
     }
     
@@ -33,11 +37,10 @@ void server_connected(char *ip, int port, int id){
     fflush(stdout);
 }
 
-char *init_board(){
-    char grid[GRID_SIZE][GRID_SIZE];
+void init_board(){
     cleanup_board(grid);
+    cleanup_board(target_grid);
     draw_board(grid);
-    return grid;
 }
 
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]){
@@ -70,6 +73,14 @@ void draw_board(char griglia[GRID_SIZE][GRID_SIZE]) {
     fflush(stdout);
 }
 
+void draw_grids(){
+    printf("\n--- LA TUA FLOTTA ---\n");
+    draw_board(grid); 
+    
+    printf("\n--- RADAR NEMICO ---\n");
+    draw_board(target_grid);
+}
+
 void clean_screen(){
     system("clear");
 }
@@ -77,6 +88,30 @@ void clean_screen(){
 void close_game(){
     printf("Grazie per aver giocato! Arrivederci!\n");
     fflush(stdout);
-    clear_screen();
+    clean_screen();
     exit(0);
+}
+
+void addboat(int x, int y, char orientazione, int size){
+    int riga_off = 0;
+    int col_off = 0;
+
+    if (orientazione == 'N') { 
+        riga_off = -1; // alto
+    } else if (orientazione == 'S') { 
+        riga_off = 1;  // basso
+    } else if (orientazione == 'E') { 
+        col_off = 1;   // destra
+    } else if (orientazione == 'O') { 
+        col_off = -1;  // sinistra
+    }
+
+    for (int i = 0; i < size; i++) {
+        int r = x + (i * riga_off);
+        int c = y + (i * col_off);
+        
+        if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
+            grid[r][c] = 'N'; 
+        }
+    }
 }

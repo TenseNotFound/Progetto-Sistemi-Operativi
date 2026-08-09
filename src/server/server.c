@@ -24,6 +24,7 @@
 
 typedef game_info info;
 typedef azioni mosse;
+typedef struct players player;
 
 volatile sig_atomic_t timeout = 1, shutdown_flag = 0;
 int port;           // eventualmente qua va poi dichiarato il semaforo
@@ -34,13 +35,14 @@ void chiusura (int sig);
 void *client_thread (void *args);
 int recv_msg(int fd, azioni *msg);
 int send_msg(int fd, azioni *msg);
-void *add_player(int fd);
+void *add_player(int fd, char *username);
 player *trova_giocatore(int id); // serve per trovare un giocatore in base al suo id quando si vuole fare una 
                                 // mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
 ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete
 ssize_t writen(int fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete
 //serve perchè ho bisogno di passare più informazioni al thread, uso quindi una struttura
-typedef struct{
+
+typedef struct{ // descrive il client
     int client_fd;
     struct sockaddr_in client_addr;
 }client_arg;
@@ -48,6 +50,7 @@ typedef struct{
 
 typedef struct players{
     int id;
+    char username[USERNAME];
     int socket;
     pthread_t thread;
     char griglia[GRID_SIZE][GRID_SIZE];
@@ -63,7 +66,7 @@ typedef struct{
     int count;
     int next_id;
     int game_started;
-    int active_threads; // serve per tenere traccia di quanti thread client sono attivi, così da poterli chiudere tutti in caso di chiusura del server
+    int active_threads; // serve per tenere traccia di quanti thread client sono attivi, così da poterli chiudere tutti in caso di poweroff
     pthread_mutex_t lock;
 } gstate;
 
@@ -92,8 +95,7 @@ int main(int argc, char **argv){
     printf("\n      POSIX SERVER RELEASE        \nStartup server...\n");
     fflush(stdout);
 
-    
-
+    srand((unsigned int)time(NULL));
 
     int llisten = socket(AF_INET, SOCK_STREAM, 0);
     if (llisten < 0) {
@@ -294,41 +296,46 @@ int main(int argc, char **argv){
 
 void *client_thread(void *args){
     client_arg *cargs = (client_arg *)args;
+    int fd = cargs->client_fd;
 
     //recupero ip e porta del client collegato
     char *ip = inet_ntoa(cargs->client_addr.sin_addr);
     int portc = ntohs(cargs->client_addr.sin_port);
 
-    printf("Nuova connessione:\n     client collegato %s:%d \n", ip, portc);
+    printf("Nuova connessione:\n [*] Client collegato %s:%d \n", ip, portc);
     fflush(stdout);
 
     azioni msg;
+    bzero(&msg, sizeof(msg));
 
     if(recv_msg(cargs->client_fd, &msg) != 0 || msg.type != JOIN){
         printf("(Server) handshake non validato per %s:%d\n", ip, portc);
         free(cargs);
-        close(cargs->client_fd);
+        close(fd);
         return NULL;
     }
 
+    msg.username[USERNAME -1] = '\0';
+
+    // serve causa rischio race condition, qua basta un mutex ed un semaforo non è necessario
     pthread_mutex_lock(&stato.lock);
 
-    player *me = add_player(cargs->client_fd);
+    player *me = add_player(fd, msg.username);
     if (me == NULL) {
         pthread_mutex_unlock(&stato.lock);
         printf("(Server) Impossibile creare struct player per %s:%d\n", ip, portc);
         free(cargs);
-        close(cargs->client_fd);
+        close(fd);
         return NULL;
     }
-    int assignet_id = me->id;
+    int assigned_id = me->id;
 
     pthread_mutex_unlock(&stato.lock);
 
     azioni welcome_msg;
-    memset(&welcome_msg, 0, sizeof(azioni));
+    bzero(&welcome_msg, sizeof(welcome_msg));
     welcome_msg.type = WELCOME;
-    welcome_msg.player_id = assignet_id;
+    welcome_msg.player_id = assigned_id;
 
     if(send_msg(cargs->client_fd, &welcome_msg) == -1){
         printf("Errore nell'invio del messaggio di benvenuto a %s:%d\n", ip, portc);
@@ -337,7 +344,7 @@ void *client_thread(void *args){
         return NULL;
     }
 
-    printf("Giocatore %d connesso da %s:%d\n", assignet_id, ip, portc);
+    printf("Giocatore %d (\"%s\") connesso da %s:%d\n", assigned_id, msg.username, ip, portc);
     fflush(stdout);
 
 
@@ -352,7 +359,7 @@ void *client_thread(void *args){
     pthread_mutex_unlock(&stato.lock);
 
     free(cargs);
-    close(cargs->client_fd);
+    close(fd);
     return NULL;
 
 }
@@ -366,6 +373,7 @@ int send_msg(int fd, azioni *msg){
     packet.target_id = htonl(msg->target_id);
     packet.x = htonl(msg->x);
     packet.y = htonl(msg->y);
+	memcpy(packet.username, msg->username, USERNAME);
 
     ssize_t n = writen(fd, &packet, sizeof(azioni));
     // c'è rischio che in TCP si scrivano meno byte di quelli richiesti,
@@ -391,6 +399,7 @@ int recv_msg(int fd, azioni *msg){
         msg->target_id = ntohl(packet.target_id);
         msg->x = ntohl(packet.x);
         msg->y = ntohl(packet.y);
+		memcpy(msg->username, packet.username, USERNAME);
 
         return 0;
     } else if(n == 0){
@@ -442,7 +451,7 @@ ssize_t writen(int fd, const void *buff, size_t n){
     return (ssize_t)n; // se arrivo qui ho scritto tutti i byte richiesti e comunico con n
 }
 
-void *add_player(int fd){
+void *add_player(int fd, char *username){
     player *new_player = malloc(sizeof(player));
 
     if(new_player == NULL){
@@ -451,6 +460,8 @@ void *add_player(int fd){
     }
 
     new_player->id = stato.next_id++;
+    strncpy(username, new_player->username, USERNAME -1);
+    new_player->username[USERNAME-1] = '\0';
     new_player->socket = fd;
     new_player->alive = 1;
     new_player->sem_id = new_player->id;
@@ -460,7 +471,7 @@ void *add_player(int fd){
     new_player->next = stato.head;
     stato.head = new_player;
     stato.count++;
-    memset(new_player->griglia, 0, sizeof(new_player->griglia)); // pulizia della griglia del giocatore
+    bzero(&new_player->griglia, sizeof(new_player->griglia));
 
     return new_player;
 }

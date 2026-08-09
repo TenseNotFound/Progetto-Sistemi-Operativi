@@ -6,8 +6,9 @@
 
 
 void gui_init(int flag);
-char *init_board();
+void init_board();
 void draw_board(char grid[GRID_SIZE][GRID_SIZE]);
+void addboat(int x, int y, char orientazione, int size);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);
 void server_connected(char *ip, int port, int id);
 
