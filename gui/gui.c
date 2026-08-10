@@ -123,3 +123,24 @@ void addboat(int x, int y, char orientazione, int size){
         }
     }
 }
+
+int game_mode(){
+
+    char input[BUFFER_SIZE];
+
+    printf("\n [*] Scegli la modalità di gioco! \n");
+    printf("   [1] 1v1 \n");
+    printf("   [2] Default [Premi invio o qualsiasi altro tasto]\n");
+    fflush(stdout);
+
+    if(fgets(stdin, sizeof(input), input) == NULL){
+        return MODE_DEFAULT;
+    }
+
+    input[strlen(input)-1] = '\0';
+
+    if(strcpm(input, '1') == 0){
+        return MODE_1V1;
+    } 
+    return MODE_DEFAULT;
+}

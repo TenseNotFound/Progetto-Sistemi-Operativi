@@ -43,24 +43,27 @@ int port;
 
 
 // la validazione viene fatta dal server
-/*
-	bool validazione( bool board[10][10], int x, int y, char orientazione, int dimensione_nave ) {
 
+bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ) {
+	// la funzione si occupa di controllare e validare il piazzamento andando a controllare i limiti di griglia 
+	// marcando quale posizione risulta occupata, non è il controllo ufficiale ma serve solo in fase di posizionamento
+	// il vero controllo poi lo rifarà anche il server.
     int delta_riga, delta_colonna, r, c;
-	if ( orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O' ) {
-		printf("orientazione scelta non valida\n");
-		return false; 
-	}
-	else if ( orientazione == 'N' ) { delta_riga = -1; delta_colonna = 0;}
+	
+	if ( orientazione == 'N' ) { delta_riga = -1; delta_colonna = 0;}
 	else if ( orientazione == 'S' ) { delta_riga = 1; delta_colonna = 0;}
 	else if ( orientazione == 'E' ) { delta_riga = 0; delta_colonna = 1;}
 	else if ( orientazione == 'O' ) { delta_riga = 0; delta_colonna = -1;}
+	else return false;
+	
 	for ( int i = 0; i < dimensione_nave; i++ ) {
 		r = x + i * delta_riga;
 		c = y + i * delta_colonna;
-		if ( r < 0 || r >= 10 || c < 0 || c >= 10 ) { return false;}
-		else if ( board[r][c] == true ) { return false;} 
+		if ( r < 0 || r >= 10 || c < 0 || c >= 10 ) { 
+			return false;
+		} else if ( board[r][c] == true ) return false;
 	}
+
 	for ( int i = 0; i < dimensione_nave; i++ ) {
 		r = x + i * delta_riga;
 		c = y + i * delta_colonna;
@@ -68,7 +71,7 @@ int port;
 	}
 	return true;
 }
-*/
+
 
 int main(int argc, char **argv) {
 
@@ -158,6 +161,19 @@ int main(int argc, char **argv) {
 	// ok handshake, il server mi ha assegnato un id
 	mio_id = welcome_msg.player_id;
 	server_connected(ip_buf, port, -1);
+	
+	azioni mode_msg;
+	bzero(&mode_msg, sizeof(mode_msg));
+	mode_msg.type = MODE;
+	mode_msg.player_id = mio_id;
+	mode_msg.gamemode = game_mode();
+
+	if(send_msg(socketfd, &mode_msg) == -1){
+		perror("errore nell'invio della modalità di gioco");
+		close(socketfd);
+		return -1;
+	}
+
 
 	init_board();
 
@@ -223,6 +239,7 @@ int send_msg(int fd, azioni *msg){
     packet.target_id = htonl(msg->target_id);
     packet.x = htonl(msg->x);
     packet.y = htonl(msg->y);
+	packet.gamemode = htonl(msg->gamemode);
 	memcpy(packet.username, msg->username, USERNAME);
 
     ssize_t n = writen(fd, &packet, sizeof(azioni));
@@ -249,6 +266,7 @@ int recv_msg(int fd, azioni *msg){
         msg->target_id = ntohl(packet.target_id);
         msg->x = ntohl(packet.x);
         msg->y = ntohl(packet.y);
+		msg->gamemode = ntohl(packet.gamemode);
 		memcpy(msg->username, packet.username, USERNAME);
 
         return 0;
@@ -317,16 +335,26 @@ int piazzamento_navi (int socket) {
 	posizionamento posizioni_navi[SHIP_NUMBER];
 	int x, y;
 	char orientazione;
+	bool occupata[GRID_SIZE][GRID_SIZE] = {false}, valid; // griglia temporanea per capire dove ho messo le navi
 
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
 		fflush_stdin();
 		draw_grids();
-		printf("Inserisci le coordinate della nave %s (dimensione %d) e l'orientamento (N,S,E,O):\n", ship_tipe[i].name, ship_tipe[i].size);
-		while(scanf("%d %d %c", &x, &y, &orientazione)!= 3 || (orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O')){ 
-			printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"); 
-			fflush(stdout);
-			fflush_stdin();
-		}
+		do {
+			printf("Inserisci le coordinate della nave %s (dimensione %d) e l'orientamento (N,S,E,O):\n", ship_tipe[i].name, ship_tipe[i].size);
+			while(scanf("%d %d %c", &x, &y, &orientazione)!= 3 || (orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O')){ 
+				printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"); 
+				fflush(stdout);
+				fflush_stdin();
+			}
+
+			valid = validazione(occupata, x - 1, y - 1, orientazione, ship_tipe[i].size);
+			if (!valid) {
+				printf("Posizionamento non valido: la nave esce dalla griglia o si sovrappone a un'altra nave. Riprova.\n");
+				fflush(stdout);
+			}
+		} while (!valid);
+
 		posizioni_navi[i].index = i;
 		posizioni_navi[i].x = x-1;
 		posizioni_navi[i].y = y-1;
@@ -395,7 +423,6 @@ int discovery_server(char *ip, int *port){
 	broadcast.sin_port = htons(DISCOVERY_PORT);
 	broadcast.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 	
-
 	printf("[*] Richiesta di discovery inviata con successo (broadcast). \n In attesa di riscontro dal server...\n");
 	fflush(stdout);
 
@@ -404,7 +431,6 @@ int discovery_server(char *ip, int *port){
 
 	ssize_t n;
 	
-
 	for(int i = 0; i<TENTATIVI; i++){
 
 		if(sendto(sock, DISCOVER, strlen(DISCOVER), 0, (struct sockaddr *)&broadcast, sizeof(broadcast))<0){

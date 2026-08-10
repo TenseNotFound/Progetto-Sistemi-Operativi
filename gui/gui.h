@@ -12,6 +12,7 @@ void draw_board(char grid[GRID_SIZE][GRID_SIZE]);
 void addboat(int x, int y, char orientazione, int size);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);
 void server_connected(char *ip, int port, int id);
+int game_mode();
 void draw_grids();
 
 void clean_screen();

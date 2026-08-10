@@ -15,12 +15,18 @@ typedef enum game_info{ // serve poi per capire che mossa/azione è stata fatta/
     WELCOME, JOIN, TURN, MOVE, HIT, MISS, ELIMINATED, WIN, MODE
 }game_info;
 
+typedef enum mode {
+    MODE_DEFAULT, 
+    MODE_1V1
+} mode;
+
 
 typedef struct azioni{ // mi definisce la mossa
     game_info type; // specifico il tipo di azione
     int player_id;
     int target_id;
     int x,y; // posizione nave da colpire
+    mode gamemode;
     char username[USERNAME];
 } azioni;
 

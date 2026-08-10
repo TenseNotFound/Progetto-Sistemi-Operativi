@@ -391,6 +391,8 @@ int send_msg(int fd, azioni *msg){
     packet.target_id = htonl(msg->target_id);
     packet.x = htonl(msg->x);
     packet.y = htonl(msg->y);
+	packet.gamemode = htonl(msg->gamemode);
+    
 	memcpy(packet.username, msg->username, USERNAME);
 
     ssize_t n = writen(fd, &packet, sizeof(azioni));
@@ -417,6 +419,7 @@ int recv_msg(int fd, azioni *msg){
         msg->target_id = ntohl(packet.target_id);
         msg->x = ntohl(packet.x);
         msg->y = ntohl(packet.y);
+        msg->gamemode = ntohl(packet.gamemode);
 		memcpy(msg->username, packet.username, USERNAME);
 
         return 0;
@@ -519,11 +522,11 @@ void *udp_discovery_port(void *args){
         pthread_exit(NULL);
     }
 
-    struct timeval time;
+    struct timeval time; // dal man di setsockopt
     time.tv_sec = 2; 
     time.tv_usec = 0;
     if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &time, sizeof(time)) < 0) {
-        perror("Errore nell'impostare il timeout UDP");
+        perror("errore nel setup del timer in setsockopt");
         close(socket_fd);
         pthread_exit(NULL);
     }
