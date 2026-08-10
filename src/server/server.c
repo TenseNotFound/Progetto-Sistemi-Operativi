@@ -519,10 +519,10 @@ void *udp_discovery_port(void *args){
         pthread_exit(NULL);
     }
 
-    struct timeval tv;
-    tv.tv_sec = 2; 
-    tv.tv_usec = 0;
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    struct timeval time;
+    time.tv_sec = 2; 
+    time.tv_usec = 0;
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &time, sizeof(time)) < 0) {
         perror("Errore nell'impostare il timeout UDP");
         close(socket_fd);
         pthread_exit(NULL);

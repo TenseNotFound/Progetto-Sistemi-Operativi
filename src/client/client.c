@@ -380,70 +380,63 @@ int discovery_server(char *ip, int *port){
 		return -1;
 	}
 
+	struct timeval time; // dal man di setsockopt
+    time.tv_sec = 2; 
+    time.tv_usec = 0;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &time, sizeof(time)) < 0) {
+        perror("errore nel setup del timer in setsockopt");
+        close(sock);
+        pthread_exit(NULL);
+    }
+
 	struct sockaddr_in broadcast;
 	bzero(&broadcast, sizeof(broadcast));
 	broadcast.sin_family = AF_INET;
 	broadcast.sin_port = htons(DISCOVERY_PORT);
 	broadcast.sin_addr.s_addr = htonl(INADDR_BROADCAST);
-
-	if(sendto(sock, DISCOVER, strlen(DISCOVER), 0, (struct sockaddr *)&broadcast, sizeof(broadcast))<0){
-		perror("Errore nell'inviare il payload di discovery");
-		close(sock);
-		return -1;
-	}
+	
 
 	printf("[*] Richiesta di discovery inviata con successo (broadcast). \n In attesa di riscontro dal server...\n");
 	fflush(stdout);
 
-
-	// timeout per il listen broadcast -> fatto con una segnalazione SIGALRM
-
-	struct sigaction sa;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sa.sa_handler = udp_handler;
-    
-    if (sigaction(SIGALRM, &sa, NULL) == -1) {
-        perror("Errore sigaction");
-        close(sock);
-        return -1;
-    }
-
-	alarm(TIMEOUT);
-
 	struct sockaddr_in ricezione;
 	char buffer[BUFFER_SIZE];
 
-	socklen_t dim = sizeof(ricezione);
-	ssize_t n = recvfrom(sock, buffer, sizeof(buffer) -1 , 0, (struct sockaddr *)&ricezione, &dim);
+	ssize_t n;
+	
 
-	alarm(0);
+	for(int i = 0; i<TENTATIVI; i++){
 
-	if(n < 0){
-        if(errno == EINTR){
-            printf("Timeout: Nessun server trovato nella rete in %d secondi\n", TIMEOUT);
-        } else {
-            perror("recvfrom() errore");
+		if(sendto(sock, DISCOVER, strlen(DISCOVER), 0, (struct sockaddr *)&broadcast, sizeof(broadcast))<0){
+			perror("Errore nell'inviare il payload di discovery");
+			close(sock);
+			return -1;
+		}
+
+		n = recvfrom(sock, buffer, sizeof(buffer) -1 , 0, (struct sockaddr *)&ricezione, sizeof(ricezione));
+
+		if (n > 0) {
+            buffer[n] = '\0';
+            
+            if (atoi(buffer) > 0) { 
+                strncpy(ip, inet_ntoa(ricezione.sin_addr), 15); // il server manda solo la porta (Payload), il resto è nell'header del pacchetto
+                ip[15] = '\0';
+                *port = atoi(buffer);
+
+                printf("[*] Server trovato con successo!\n[*] In ascolto su %s:%d\n", ip, *port);
+				fflush(stdout);
+                close(sock);
+                return 0;
+            }
         }
-        close(sock);
-        return -1;
-    }
+        
+        printf(" -> Tentativo %d fallito (Timeout), riprovo...\n", i + 1);
+        fflush(stdout);
 
-	buffer[n] = '\0';
-    strncpy(ip, inet_ntoa(ricezione.sin_addr), 16);
-    ip[15] = '\0';
+	}
 
-    *port = atoi(buffer);
-
-    printf("[*] Server trovato con successo!\n[*] In ascolto su %s:%d\n", ip, *port);
-
+	printf("[*] Nessun server trovato nella rete dopo %d tentativi.\n", TENTATIVI);
     close(sock);
-    return 0;	
+    return -1;	
 
 }
-
-void udp_handler(int sig){
-	// serve solo per sbloccare la recvfrom dal timeout in udp per evitare i blocchi
-	(void)sig;
-}
-
