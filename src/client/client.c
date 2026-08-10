@@ -18,6 +18,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -126,8 +127,6 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
-	server_connected(ip_buf, port, -1);
-
 	char username[USERNAME];
 	getUsername(username, USERNAME);
 
@@ -158,6 +157,8 @@ int main(int argc, char **argv) {
 
 	// ok handshake, il server mi ha assegnato un id
 	mio_id = welcome_msg.player_id;
+	server_connected(ip_buf, port, -1);
+
 	init_board();
 
 
@@ -185,7 +186,7 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
 		return -1;
 	}
 
-	if(connect(socketfd, (struct sockaddr_in *)&server_addr, sizeof(struct sockaddr_in)) == -1){
+	if(connect(socketfd, (struct sockaddr_in *)server_addr, sizeof(struct sockaddr_in)) == -1){
 		perror("Errore nella connessione al server");
 		close(socketfd);
 		return -1;
@@ -214,6 +215,7 @@ void getUsername(char *buf, size_t len){
 
 int send_msg(int fd, azioni *msg){
     azioni packet;
+	bzero(&packet, sizeof(packet));
 
     //carico i dati in rete
     packet.type = htonl(msg->type);
@@ -320,20 +322,21 @@ int piazzamento_navi (int socket) {
 		fflush_stdin();
 		draw_grids();
 		printf("Inserisci le coordinate della nave %s (dimensione %d) e l'orientamento (N,S,E,O):\n", ship_tipe[i].name, ship_tipe[i].size);
-		while(scanf("%d %d %c", &x, &y, &orientazione)!= 3){ 
-			printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento>\n"); 
+		while(scanf("%d %d %c", &x, &y, &orientazione)!= 3 || (orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O')){ 
+			printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"); 
 			fflush(stdout);
 			fflush_stdin();
 		}
 		posizioni_navi[i].index = i;
-		posizioni_navi[i].x = x;
-		posizioni_navi[i].y = y;
+		posizioni_navi[i].x = x-1;
+		posizioni_navi[i].y = y-1;
 		posizioni_navi[i].orientation = orientazione;
 
 		addboat(x - 1 , y - 1, orientazione, ship_tipe[i].size);
-
-		printf("Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_tipe[i].name, x, y, orientazione);
+	
 		clean_screen();
+		printf("Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_tipe[i].name, x, y, orientazione);
+		
 		fflush(stdout);
 	}
 
@@ -350,6 +353,7 @@ int piazzamento_navi (int socket) {
 int invio_navi(int socket, posizionamento *navi){
 	for(int i = 0; i< SHIP_NUMBER; i++){
 		posizionamento p;
+		bzero(&p, sizeof(p)); //pulisco prima di inviare
 		p.index = htonl(navi[i].index);
 		p.x = htonl(navi[i].x);
 		p.y = htonl(navi[i].y);
@@ -377,6 +381,7 @@ int discovery_server(char *ip, int *port){
 	}
 
 	struct sockaddr_in broadcast;
+	bzero(&broadcast, sizeof(broadcast));
 	broadcast.sin_family = AF_INET;
 	broadcast.sin_port = htons(DISCOVERY_PORT);
 	broadcast.sin_addr.s_addr = htonl(INADDR_BROADCAST);

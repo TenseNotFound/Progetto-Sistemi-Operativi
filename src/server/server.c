@@ -16,6 +16,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <arpa/inet.h>
+#include <time.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,7 +28,7 @@ typedef game_info info;
 typedef azioni mosse;
 typedef struct players player;
 
-volatile sig_atomic_t timeout = 1, shutdown_flag = 0;
+volatile sig_atomic_t timeout = 1, shutdown_flag = 0, lobby_aperta = 1;;
 int port;           // eventualmente qua va poi dichiarato il semaforo
 
 void *udp_discovery_port(void *args);
@@ -77,7 +79,7 @@ static gstate stato = {
     0, // 0 -> partita non iniziata, 1 -> partita iniziata
     0, // inizialmente nessun thread attivo
     PTHREAD_MUTEX_INITIALIZER
-} ;
+};
 
 int main(int argc, char **argv){
 
@@ -249,6 +251,7 @@ int main(int argc, char **argv){
         
     }
 
+    lobby_aperta = 0;
     close(llisten);
     /*
           printf("\n[*] Chiusura del server in corso...\n");
@@ -304,7 +307,9 @@ void *client_thread(void *args){
     int fd = cargs->client_fd;
 
     //recupero ip e porta del client collegato
-    char *ip = inet_ntoa(cargs->client_addr.sin_addr);
+    char ip[16];
+    strncpy(ip, inet_ntoa(cargs->client_addr.sin_addr), 15);
+    ip[15] = '\0';    
     int portc = ntohs(cargs->client_addr.sin_port);
 
     printf("Nuova connessione:\n [*] Client collegato %s:%d \n", ip, portc);
@@ -315,8 +320,7 @@ void *client_thread(void *args){
 
     if(recv_msg(cargs->client_fd, &msg) != 0 || msg.type != JOIN){
         printf("(Server) handshake non validato per %s:%d\n", ip, portc);
-        free(cargs);
-        close(fd);
+        goto exit;
         return NULL;
     }
 
@@ -329,9 +333,7 @@ void *client_thread(void *args){
     if (me == NULL) {
         pthread_mutex_unlock(&stato.lock);
         printf("(Server) Impossibile creare struct player per %s:%d\n", ip, portc);
-        free(cargs);
-        close(fd);
-        return NULL;
+        goto exit;
     }
     int assigned_id = me->id;
 
@@ -344,13 +346,20 @@ void *client_thread(void *args){
 
     if(send_msg(cargs->client_fd, &welcome_msg) == -1){
         printf("Errore nell'invio del messaggio di benvenuto a %s:%d\n", ip, portc);
-        free(cargs);
-        close(cargs->client_fd);
-        return NULL;
+        goto exit;
     }
 
     printf("Giocatore %d (\"%s\") connesso da %s:%d\n", assigned_id, msg.username, ip, portc);
     fflush(stdout);
+
+    /*
+        SE IL THREAD DEVE MORIRE QUINDI return NULL; copia e incolla questo
+        pthread_mutex_lock(&stato.lock);
+        stato.active_threads--; 
+        pthread_mutex_unlock(&stato.lock);
+        IL MUTEX SERVE SOLO NELLE ZONE NON PROTETTE, SE GIà PROTETTA OK
+        METTI goto exit;
+    */
 
 
     /*
@@ -359,6 +368,8 @@ void *client_thread(void *args){
 
 
 
+
+exit:
     pthread_mutex_lock(&stato.lock);
     stato.active_threads--;
     pthread_mutex_unlock(&stato.lock);
@@ -366,11 +377,13 @@ void *client_thread(void *args){
     free(cargs);
     close(fd);
     return NULL;
+    
 
 }
 
 int send_msg(int fd, azioni *msg){
     azioni packet;
+    bzero(&packet, sizeof(packet));
 
     //carico i dati in rete
     packet.type = htonl(msg->type);
@@ -498,22 +511,32 @@ player *trova_giocatore(int id){
 }
 
 void *udp_discovery_port(void *args){
-    int porta = *((int *)args);
+    int porta = *((int *)args), n;
 
     int socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if(socket_fd < 0){
         perror("Errore nella creazione del socket UDP");
         pthread_exit(NULL);
     }
+
+    struct timeval tv;
+    tv.tv_sec = 2; 
+    tv.tv_usec = 0;
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        perror("Errore nell'impostare il timeout UDP");
+        close(socket_fd);
+        pthread_exit(NULL);
+    }
+
     struct sockaddr_in udp_addr, client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
+    socklen_t client_addr_len = sizeof(client_addr); // serve per dopo nelle send e recv
 
     //ripulisco le strutture per sicurezza
     memset(&udp_addr, 0, sizeof(udp_addr));
     memset(&client_addr, 0, sizeof(client_addr));
 
     udp_addr.sin_family = AF_INET;
-    udp_addr.sin_port = htons(DISCOVERY_PORT); // porta di discovery
+    udp_addr.sin_port = htons(DISCOVERY_PORT); 
     udp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if(bind(socket_fd, (struct sockaddr *)&udp_addr, sizeof(udp_addr))<0){
@@ -525,10 +548,10 @@ void *udp_discovery_port(void *args){
     char buffer[BUFFER_SIZE], reply[BUFFER_SIZE]; // dimensioni allineate con il client, definite nel protocollo.h
     
 
-    while(!shutdown_flag){
+    while(!shutdown_flag && lobby_aperta){
         buffer[0] = '\0';
-        int n = recvfrom(socket_fd, buffer, sizeof(buffer)-1, 0, (struct sockaddr *)&client_addr, &client_addr_len);
-        if(n > 0 && strcmp(buffer, "DISCOVER") == 0){
+        n = recvfrom(socket_fd, buffer, sizeof(buffer)-1, 0, (struct sockaddr *)&client_addr, &client_addr_len); // bloccata al massimo per 2s
+        if(n > 0){
             buffer[n] = '\0';
             if(strcmp(buffer, "DISCOVER") == 0){
                 snprintf(reply, sizeof(reply), "%d", porta);
@@ -537,10 +560,8 @@ void *udp_discovery_port(void *args){
                 fflush(stdout);
             }
         } else if(n < 0){
-            if(errno == EINTR) continue; // se l'errore è dovuto a una segnalazione, riprovo
+            if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue; // se l'errore è dovuto a una segnalazione, riprovo
             perror("Errore nella ricezione del messaggio UDP");
-        } else {
-            continue; // messaggio non valido, ignoro
         }
     }
 

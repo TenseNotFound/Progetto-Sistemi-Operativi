@@ -3,6 +3,7 @@
 #include "../protocollo/protocollo.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 
 void gui_init(bool flag);

@@ -7,6 +7,14 @@
 static char grid[GRID_SIZE][GRID_SIZE];
 static char target_grid[GRID_SIZE][GRID_SIZE];
 
+const nave ship_tipe[SHIP_NUMBER] = {
+    {"Portaerei", 5},
+    {"Corazzata", 4},
+    {"Incrociatore", 3},
+    {"Sottomarino", 3},
+    {"Cacciatorpediniere", 2}
+};
+
 void gui_init(bool flag){
     clean_screen();
 

@@ -36,12 +36,6 @@ typedef struct navi{
     posizionamento posizioni[5]; // massimo 5 navi, quindi massimo 5 posizioni
 } nave;
 
-static const nave ship_tipe[SHIP_NUMBER] = {
-    {"Portaerei", 5},
-    {"Corazzata", 4},
-    {"Incrociatore", 3},
-    {"Sottomarino", 3},
-    {"Cacciatorpediniere", 2}
-};
+extern const nave ship_tipe[SHIP_NUMBER]; // così non creo 3 blocchi di memoria identica 
 
 #endif
