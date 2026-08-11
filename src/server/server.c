@@ -28,7 +28,7 @@ typedef game_info info;
 typedef azioni mosse;
 typedef struct players player;
 
-volatile sig_atomic_t timeout = 1, shutdown_flag = 0, lobby_aperta = 1;;
+volatile sig_atomic_t timeout = 1, lobby_aperta = 1;shutdown_flag = 0;
 int port;           // eventualmente qua va poi dichiarato il semaforo
 
 void *udp_discovery_port(void *args);
@@ -102,14 +102,14 @@ int main(int argc, char **argv){
     int llisten = socket(AF_INET, SOCK_STREAM, 0);
     if (llisten < 0) {
         perror("Errore nel socket");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     int opt = 1, ret;
     ret = setsockopt(llisten, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if(ret == -1){
         perror("Errore nella setsockopt");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     struct sockaddr_in server_addr;
@@ -150,14 +150,14 @@ int main(int argc, char **argv){
     if (!bound) {
         perror("Impossibile trovare una porta libera dopo il numero massimo di tentativi concesso");
         close(llisten);
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
-    // dimensione del backlog -> dimensione della coda di attesa a 16 data dal define iniziale
+    // dimensione del backlog -> dimensione della coda di attesa, definita nel protocollo
     if (listen(llisten, BACKLOG) < 0) {
         perror("listen() fallita");
         close(llisten);
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     printf("\n==================================================\n         SERVER AVVIATO CON SUCCESSO         \n==================================================\n");
@@ -173,12 +173,16 @@ int main(int argc, char **argv){
 
     if (sigemptyset(&sa.sa_mask) == -1){
         perror("Errore nello svuotare la maschera delle segnalazioni");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     if(sigaction(SIGALRM, &sa, NULL) == -1){
         perror("Errore nell'installare la sigaction, procedo con l'installazione della signal");
         signal(SIGALRM, timeout_lobby);
+        if(errno == SIG_ERR){
+            perror("Errore nell'installazione della signal");
+            exit(EXIT_FAILURE);
+        }
     }
     
     sa.sa_handler = chiusura;
@@ -186,10 +190,18 @@ int main(int argc, char **argv){
     if (sigaction(SIGINT, &sa, NULL) == -1) {
         perror("Errore nell'installare la sigaction per SIGINT");
         signal(SIGINT, chiusura);
+        if(errno == SIG_ERR){
+            perror("Errore nell'installazione della signal");
+            exit(EXIT_FAILURE);
+        }
     }
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
         perror("Errore nell'installare la sigaction per SIGTERM");
         signal(SIGTERM, chiusura);
+        if(errno == SIG_ERR){
+            perror("Errore nell'installazione della signal");
+            exit(EXIT_FAILURE);
+        }
     }
 
     pthread_t udp_thread;
@@ -197,7 +209,7 @@ int main(int argc, char **argv){
     if(pthread_create(&udp_thread, NULL, udp_discovery_port, &port) != 0){
         perror("Errore nella creazione del thread per la discovery UDP");
         close(llisten);
-        exit(-1);
+        exit(EXIT_FAILURE);
     } else {
         pthread_detach(udp_thread);
         printf("Thread UDP discovery creato con successo\n");
@@ -215,8 +227,8 @@ int main(int argc, char **argv){
 
         int client = accept(llisten, (struct sockaddr *)&client_addr, &addrlen); // bloccante
         if(client == -1){
-            if(errno == EINTR) continue; // se l'errore è dovuto a una segnalazione, riprovo
-            perror("Errore nell'accept() in ascolto del client (server)");
+            if(errno == EINTR) continue;
+            perror("Errore nell'accept() in ascolto del client");
             continue;
         }
 
@@ -248,7 +260,6 @@ int main(int argc, char **argv){
         }
         pthread_detach(tid);
 
-        
     }
 
     lobby_aperta = 0;
@@ -358,7 +369,7 @@ void *client_thread(void *args){
         stato.active_threads--; 
         pthread_mutex_unlock(&stato.lock);
         IL MUTEX SERVE SOLO NELLE ZONE NON PROTETTE, SE GIà PROTETTA OK
-        METTI goto exit;
+                                METTI goto exit;
     */
 
 
@@ -376,9 +387,8 @@ exit:
 
     free(cargs);
     close(fd);
-    return NULL;
+    pthread_exit(NULL);
     
-
 }
 
 int send_msg(int fd, azioni *msg){
@@ -492,11 +502,13 @@ void *add_player(int fd, char *username){
     new_player->next = stato.head;
     stato.head = new_player;
     stato.count++;
+
     for(int i = 0; i < GRID_SIZE; i++){
         for(int j = 0; j < GRID_SIZE; j++){
             new_player->griglia[i][j] = '~';
         }
     }
+
     return new_player;
 }
 
@@ -514,9 +526,8 @@ player *trova_giocatore(int id){
 }
 
 void *udp_discovery_port(void *args){
-    int porta = *((int *)args), n;
-
-    int socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int porta = *((int *)args), socket_fd = socket(AF_INET, SOCK_DGRAM, 0), n;
+    
     if(socket_fd < 0){
         perror("Errore nella creazione del socket UDP");
         pthread_exit(NULL);
@@ -548,10 +559,9 @@ void *udp_discovery_port(void *args){
         pthread_exit(NULL);
     }
 
-    char buffer[BUFFER_SIZE], reply[BUFFER_SIZE]; // dimensioni allineate con il client, definite nel protocollo.h
-    
+    char buffer[BUFFER_SIZE], reply[BUFFER_SIZE]; 
 
-    while(!shutdown_flag && lobby_aperta){
+    while(lobby_aperta){
         buffer[0] = '\0';
         n = recvfrom(socket_fd, buffer, sizeof(buffer)-1, 0, (struct sockaddr *)&client_addr, &client_addr_len); // bloccata al massimo per 2s
         if(n > 0){
