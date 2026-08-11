@@ -36,6 +36,7 @@ int piazzamento_navi (int socket);
 int invio_navi(int socket, posizionamento *navi);
 void udp_handler(int sig);
 void getUsername(char *buf, size_t len); // per prendere l'username del nuovo giocatore
+bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
 
 
 struct posizionamento Nave;
@@ -43,35 +44,6 @@ int port;
 
 
 // la validazione viene fatta dal server
-
-bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ) {
-	// la funzione si occupa di controllare e validare il piazzamento andando a controllare i limiti di griglia 
-	// marcando quale posizione risulta occupata, non è il controllo ufficiale ma serve solo in fase di posizionamento
-	// il vero controllo poi lo rifarà anche il server.
-    int delta_riga, delta_colonna, r, c;
-	
-	if ( orientazione == 'N' ) { delta_riga = -1; delta_colonna = 0;}
-	else if ( orientazione == 'S' ) { delta_riga = 1; delta_colonna = 0;}
-	else if ( orientazione == 'E' ) { delta_riga = 0; delta_colonna = 1;}
-	else if ( orientazione == 'O' ) { delta_riga = 0; delta_colonna = -1;}
-	else return false;
-	
-	for ( int i = 0; i < dimensione_nave; i++ ) {
-		r = x + i * delta_riga;
-		c = y + i * delta_colonna;
-		if ( r < 0 || r >= 10 || c < 0 || c >= 10 ) { 
-			return false;
-		} else if ( board[r][c] == true ) return false;
-	}
-
-	for ( int i = 0; i < dimensione_nave; i++ ) {
-		r = x + i * delta_riga;
-		c = y + i * delta_colonna;
-		board[r][c] = true; 
-	}
-	return true;
-}
-
 
 int main(int argc, char **argv) {
 
@@ -161,7 +133,7 @@ int main(int argc, char **argv) {
 	// ok handshake, il server mi ha assegnato un id
 	mio_id = welcome_msg.player_id;
 	server_connected(ip_buf, port, -1);
-	
+
 	azioni mode_msg;
 	bzero(&mode_msg, sizeof(mode_msg));
 	mode_msg.type = MODE;
@@ -465,4 +437,33 @@ int discovery_server(char *ip, int *port){
     close(sock);
     return -1;	
 
+}
+
+// la validazione viene poi rifatta dal server
+bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ) {
+	// la funzione si occupa di controllare e validare il piazzamento andando a controllare i limiti di griglia 
+	// marcando quale posizione risulta occupata, non è il controllo ufficiale ma serve solo in fase di posizionamento
+	// il vero controllo poi lo rifarà anche il server.
+    int delta_riga, delta_colonna, r, c;
+	
+	if ( orientazione == 'N' ) { delta_riga = -1; delta_colonna = 0;}
+	else if ( orientazione == 'S' ) { delta_riga = 1; delta_colonna = 0;}
+	else if ( orientazione == 'E' ) { delta_riga = 0; delta_colonna = 1;}
+	else if ( orientazione == 'O' ) { delta_riga = 0; delta_colonna = -1;}
+	else return false;
+	
+	for ( int i = 0; i < dimensione_nave; i++ ) {
+		r = x + i * delta_riga;
+		c = y + i * delta_colonna;
+		if ( r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE ) { 
+			return false;
+		} else if ( board[r][c] == true ) return false;
+	}
+
+	for ( int i = 0; i < dimensione_nave; i++ ) {
+		r = x + i * delta_riga;
+		c = y + i * delta_colonna;
+		board[r][c] = true; 
+	}
+	return true;
 }

@@ -42,8 +42,11 @@ player *trova_giocatore(int id); // serve per trovare un giocatore in base al su
                                 // mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
 ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete
 ssize_t writen(int fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete
-//serve perchè ho bisogno di passare più informazioni al thread, uso quindi una struttura
+bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave); // serve per il check della formazione in entrata, INTEGRITY CHECK
+int ricezione_navi(int fd, player *me); // serve per ricevere la formazione che manda il client
 
+
+//serve perchè ho bisogno di passare più informazioni al thread, uso quindi una struttura
 typedef struct{ // descrive il client
     int client_fd;
     struct sockaddr_in client_addr;
@@ -340,6 +343,12 @@ void *client_thread(void *args){
     // serve causa rischio race condition, qua basta un mutex ed un semaforo non è necessario
     pthread_mutex_lock(&stato.lock);
 
+    /*
+        FARE LA RIMOZIONE DI me QUANDO IL THREAD STA PER CHIUDERSI
+            
+    */
+
+
     player *me = add_player(fd, msg.username);
     if (me == NULL) {
         pthread_mutex_unlock(&stato.lock);
@@ -361,8 +370,16 @@ void *client_thread(void *args){
     }
 
     printf("Giocatore %d (\"%s\") connesso da %s:%d\n", assigned_id, msg.username, ip, portc);
+    printf("[*] In attesa della formazione da %s:%d (ID: %d)", ip, portc, assigned_id);
     fflush(stdout);
 
+    if(ricezione_navi(fd, me) != 0){
+        printf("Formazione ricevuta non valida");
+        goto exit;
+    }
+
+    printf("[*] Formazione ricevuta correttamente (%s)!\n", me->username);
+    fflush(stdout);
     /*
         SE IL THREAD DEVE MORIRE QUINDI return NULL; copia e incolla questo
         pthread_mutex_lock(&stato.lock);
@@ -581,6 +598,77 @@ void *udp_discovery_port(void *args){
     close(socket_fd);
     pthread_exit(NULL);
 }
+
+bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave){
+    // la funzione si occupa di controllare e validare il piazzamento andando a controllare i limiti di griglia 
+	// marcando quale posizione risulta occupata, non è il controllo ufficiale ma serve solo in fase di posizionamento
+	// il vero controllo poi lo rifarà anche il server.
+    // funzione del tutto analoga a quella che c'è in client.c
+    int delta_riga, delta_colonna, r, c;
+	
+	if ( orientazione == 'N' ) { delta_riga = -1; delta_colonna = 0;}
+	else if ( orientazione == 'S' ) { delta_riga = 1; delta_colonna = 0;}
+	else if ( orientazione == 'E' ) { delta_riga = 0; delta_colonna = 1;}
+	else if ( orientazione == 'O' ) { delta_riga = 0; delta_colonna = -1;}
+	else return false;
+	
+	for (int i = 0; i < dimensione_nave; i++) {
+        r = x + i * delta_riga;
+        c = y + i * delta_colonna;
+        
+        if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) {
+            return false; 
+        } else if (board[r][c] != '~') {
+            return false; 
+        }
+    }
+
+	for ( int i = 0; i < dimensione_nave; i++ ) {
+		r = x + i * delta_riga;
+		c = y + i * delta_colonna;
+		board[r][c] = 'N'; 
+	}
+	return true;
+}
+
+int ricezione_navi (int fd, player *me){
+    // azzera la griglia dell'utente e riceve la formazione
+    for(int i = 0; i<GRID_SIZE; i++){
+        for (int j = 0; j<GRID_SIZE; j++){
+            me->griglia[i][j] = '~';
+        }
+    }
+
+    int index /*della nave*/, x, y;
+    char orientazione;
+    for(int i = 0; i<SHIP_NUMBER; i++){
+        posizionamento p; 
+        memset(&p, sizeof(p), 0);
+        if(readn(fd, &p, sizeof(p))<0){
+            perror("Errore nella ricezione della formazione ");
+            return -1;
+        }
+
+        index = ntohl(p.index);
+        x = ntohl(p.x);
+        y = nthol(p.y);
+        orientazione = p.orientation;
+
+        if(index != i){
+            printf("Indice della nave errato");
+            return -1;
+        }
+        if(!validazione_formazione(me->griglia, x, y, orientazione, ship_tipe[i].size)){
+            printf("Inserimento della nave non valido");
+            return -1;
+        }
+
+    }
+
+    return 0;
+
+}
+
 
 /*
     INSIEME DELLE FUNZIONI DEDITE ALLA RICEZIONE DI SEGNALAZIONI
