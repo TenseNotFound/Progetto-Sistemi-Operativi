@@ -44,4 +44,6 @@ typedef struct navi{
 
 extern const nave ship_tipe[SHIP_NUMBER]; // così non creo 3 blocchi di memoria identica 
 
+void fflush_stdin();
+
 #endif

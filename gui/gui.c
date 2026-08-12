@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 char grid[GRID_SIZE][GRID_SIZE];
 char target_grid[GRID_SIZE][GRID_SIZE];
@@ -198,7 +199,7 @@ void ricezione_mossa(azioni *mossa) {
     }
 }
 
-void errore_inivo_mossa() { 
+void errore_invio_mossa(void) { 
     printf("\n[!] Errore: Impossibile inviare la mossa al server.\n");
     fflush(stdout);
 }
@@ -228,7 +229,7 @@ void spettatore(azioni *pck) {
     fflush(stdout);
 }
 
-void s_elimitato() {
+void s_eliminato() {
     printf("\n==================================================\n");
     printf(" [!] SEI STATO ELIMINATO! LA TUA FLOTTA È AFFONDATA [!]\n");
     printf("==================================================\n");

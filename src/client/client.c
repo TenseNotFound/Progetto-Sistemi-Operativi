@@ -180,12 +180,13 @@ int main(int argc, char **argv) {
 					ricezione_mossa(&mossa);
 
 					if(send_msg(socketfd, &mossa) == -1){
-						errore_inivo_mossa();
+						errore_invio_mossa();
 					}
 
 				} else {
 					non_mio_turno(pck.player_id);
 				}
+				break;
 			
 			case HIT:
 			case MISS:
@@ -208,7 +209,7 @@ int main(int argc, char **argv) {
 						esito = 'O';
 					} else esito = 'X';
 
-					target_grid[pck.x][pck.y] = esito;
+					grid[pck.x][pck.y] = esito;
 					clean_screen();
 					draw_grids();
 
@@ -225,7 +226,7 @@ int main(int argc, char **argv) {
 			
 			case ELIMINATED:
 				if(pck.target_id == mio_id){
-					s_elimitato();
+					s_eliminato();
 				} else {
 					eliminato(pck.target_id);
 				}
@@ -238,6 +239,7 @@ int main(int argc, char **argv) {
 					vittoria(pck.player_id);
 				}
 				vivo = false;
+				break;
 			default:
 				break;
 
