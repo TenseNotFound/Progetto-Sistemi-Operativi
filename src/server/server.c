@@ -72,7 +72,7 @@ typedef struct{
     int next_id;
     int game_started;
     int active_threads; // serve per tenere traccia di quanti thread client sono attivi, così da poterli chiudere tutti in caso di poweroff
-    pthread_mutex_t lock;
+    pthread_mutex_t lock; // serve per proteggere questi valori, senza che lo dichiaro globale lo metto qui dentro
 } gstate;
 
 static gstate stato = {
@@ -222,7 +222,7 @@ int main(int argc, char **argv){
     
     printf("Lobby aperta per 30s\n");
     alarm(30);
-
+ 
     //lobby con timeout
     while(timeout && !shutdown_flag){
         struct sockaddr_in client_addr;
@@ -267,6 +267,7 @@ int main(int argc, char **argv){
 
     lobby_aperta = 0;
     close(llisten);
+
     /*
           printf("\n[*] Chiusura del server in corso...\n");
     fflush(stdout);
@@ -341,7 +342,7 @@ void *client_thread(void *args){
     msg.username[USERNAME -1] = '\0';
 
     // serve causa rischio race condition, qua basta un mutex ed un semaforo non è necessario
-    pthread_mutex_lock(&stato.lock);
+
 
     /*
         FARE LA RIMOZIONE DI me QUANDO IL THREAD STA PER CHIUDERSI
@@ -350,14 +351,12 @@ void *client_thread(void *args){
 
 
     player *me = add_player(fd, msg.username);
+    int assigned_id = me->id;
+
     if (me == NULL) {
-        pthread_mutex_unlock(&stato.lock);
         printf("(Server) Impossibile creare struct player per %s:%d\n", ip, portc);
         goto exit;
     }
-    int assigned_id = me->id;
-
-    pthread_mutex_unlock(&stato.lock);
 
     azioni welcome_msg;
     bzero(&welcome_msg, sizeof(welcome_msg));
@@ -500,6 +499,8 @@ ssize_t writen(int fd, const void *buff, size_t n){
 }
 
 void *add_player(int fd, char *username){
+
+    // serve per aggiungere un nuovo player, non necessita di lock su mutex stato.lock perchè viene già fatto qui dentro
     player *new_player = malloc(sizeof(player));
 
     if(new_player == NULL){
@@ -507,25 +508,32 @@ void *add_player(int fd, char *username){
         return NULL;
     }
 
-    new_player->id = stato.next_id++;
     strncpy(new_player->username, username, USERNAME -1);
     new_player->username[USERNAME-1] = '\0';
     new_player->socket = fd;
     new_player->alive = 1;
-    new_player->sem_id = new_player->id;
+    
 
     new_player->navi_rimaste = SHIP_NUMBER;
+
+    pthread_mutex_lock(&stato.lock);
+
+    stato.next_id++;
+    new_player->id = stato.next_id;
+    new_player->sem_id = new_player->id;
 
     new_player->next = stato.head;
     stato.head = new_player;
     stato.count++;
+    
+    pthread_mutex_unlock(&stato.lock);
 
     for(int i = 0; i < GRID_SIZE; i++){
         for(int j = 0; j < GRID_SIZE; j++){
             new_player->griglia[i][j] = '~';
         }
     }
-
+    
     return new_player;
 }
 
@@ -651,7 +659,7 @@ int ricezione_navi (int fd, player *me){
 
         index = ntohl(p.index);
         x = ntohl(p.x);
-        y = nthol(p.y);
+        y = ntohl(p.y);
         orientazione = p.orientation;
 
         if(index != i){
