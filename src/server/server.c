@@ -38,6 +38,7 @@ void *client_thread (void *args);
 int recv_msg(int fd, azioni *msg);
 int send_msg(int fd, azioni *msg);
 void *add_player(int fd, char *username);
+void remove_player(int id);
 player *trova_giocatore(int id); // serve per trovare un giocatore in base al suo id quando si vuole fare una 
                                 // mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
 ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete
@@ -122,18 +123,6 @@ int main(int argc, char **argv){
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // ip assegnato dal DHCP
 
-    /*
-        per mettere 127.0.0.1 serve inserire la libreria #include <arpa/inet.h>
-        che il prof non ha spiegato, sarebbe poi così
-
-        inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
-        al posto di 
-        server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-        se serve si mette sennò va bene anche così
-    */
-
- 
     int bound = 0;
     for (int attempt = 0; attempt < TENTATIVI && !bound; attempt++) {
         server_addr.sin_port = htons(port);
@@ -319,6 +308,7 @@ int main(int argc, char **argv){
 
 void *client_thread(void *args){
     client_arg *cargs = (client_arg *)args;
+    player *me = NULL;
     int fd = cargs->client_fd;
 
     //recupero ip e porta del client collegato
@@ -341,17 +331,7 @@ void *client_thread(void *args){
 
     msg.username[USERNAME -1] = '\0';
 
-    // serve causa rischio race condition, qua basta un mutex ed un semaforo non è necessario
-
-
-    /*
-        FARE LA RIMOZIONE DI me QUANDO IL THREAD STA PER CHIUDERSI
-
-    */
-
-
-    player *me = add_player(fd, msg.username);
-    int assigned_id = me->id;
+    me = add_player(fd, msg.username);
 
     if (me == NULL) {
         printf("(Server) Impossibile creare struct player per %s:%d\n", ip, portc);
@@ -359,17 +339,17 @@ void *client_thread(void *args){
     }
 
     azioni welcome_msg;
-    bzero(&welcome_msg, sizeof(welcome_msg));
+    memset(&welcome_msg, 0, sizeof(welcome_msg));
     welcome_msg.type = WELCOME;
-    welcome_msg.player_id = assigned_id;
+    welcome_msg.player_id = me->id;
 
     if(send_msg(cargs->client_fd, &welcome_msg) == -1){
         printf("Errore nell'invio del messaggio di benvenuto a %s:%d\n", ip, portc);
         goto exit;
     }
 
-    printf("Giocatore %d (\"%s\") connesso da %s:%d\n", assigned_id, msg.username, ip, portc);
-    printf("[*] In attesa della formazione da %s:%d (ID: %d)", ip, portc, assigned_id);
+    printf("Giocatore %d (\"%s\") connesso da %s:%d\n", me->id, msg.username, ip, portc);
+    printf("[*] In attesa della formazione da %s:%d (ID: %d)", ip, portc, me->id);
     fflush(stdout);
 
     if(ricezione_navi(fd, me) != 0){
@@ -399,6 +379,10 @@ void *client_thread(void *args){
 exit:
     pthread_mutex_lock(&stato.lock);
     stato.active_threads--;
+
+    if(me != NULL){
+        remove_player(me->id);
+    }
     pthread_mutex_unlock(&stato.lock);
 
     free(cargs);
@@ -508,12 +492,17 @@ void *add_player(int fd, char *username){
         return NULL;
     }
 
+    for(int i = 0; i < GRID_SIZE; i++){
+        for(int j = 0; j < GRID_SIZE; j++){
+            new_player->griglia[i][j] = '~';
+        }
+    }
+
     strncpy(new_player->username, username, USERNAME -1);
     new_player->username[USERNAME-1] = '\0';
     new_player->socket = fd;
     new_player->alive = 1;
     
-
     new_player->navi_rimaste = SHIP_NUMBER;
 
     pthread_mutex_lock(&stato.lock);
@@ -528,13 +517,29 @@ void *add_player(int fd, char *username){
     
     pthread_mutex_unlock(&stato.lock);
 
-    for(int i = 0; i < GRID_SIZE; i++){
-        for(int j = 0; j < GRID_SIZE; j++){
-            new_player->griglia[i][j] = '~';
-        }
-    }
-    
     return new_player;
+}
+
+void remove_player(int id){
+    // serve per rimuovere i giocatori in fase di chiusura o per altri scenari
+    player *curr = stato.head;
+    player *prev = NULL;
+
+    while(curr != NULL){
+        if(curr->id == id){
+            if(prev == NULL){
+                stato.head = curr->next;
+            } else {
+                prev->next = curr->next;
+            }
+            stato.count--;
+            printf("[*] Giocatore %d (%s) rimosso con successo!", curr->id, curr->username);
+            free(curr);
+            return NULL;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
 }
 
 player *trova_giocatore(int id){
@@ -676,7 +681,6 @@ int ricezione_navi (int fd, player *me){
     return 0;
 
 }
-
 
 /*
     INSIEME DELLE FUNZIONI DEDITE ALLA RICEZIONE DI SEGNALAZIONI
