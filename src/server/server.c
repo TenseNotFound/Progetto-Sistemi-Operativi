@@ -273,10 +273,62 @@ int main(int argc, char **argv){
     close(llisten);
     pthread_mutex_lock(&stato.lock);
     n = stato.count;
+    pthread_mutex_unlock(&stato.lock);
+
+    if(n == 1){
+        printf("[*] Attenzione: un solo client collegato, startup del bot...\n");
+        fflush(stdout);
+        pid_t pid = fork();
+        if(pid == 0){
+            char porta[10];
+            snprintf(porta, sizeof(porta), "%d", port);
+            execl(".././bot", "bot", "127.0.0.1", porta, NULL);
+            perror("Errore nello startup del bot");
+            exit(1);
+        }
+
+        struct sockaddr_in bot;
+        socklen_t lbot = sizeof(bot);
+        int bot_fd = accept(llisten, (struct sockaddr *)&bot, &lbot);
+
+        if(bot_fd != -1){
+            client_arg *cbot = malloc(sizeof(client_arg));
+            if(cbot == NULL){
+                perror("Errore nella malloc");
+                goto exit;
+            }
+
+            cbot->client_fd = bot_fd;
+            cbot->client_addr = bot;
+
+            pthread_t tid;
+            pthread_mutex_lock(&stato.lock);
+            stato.active_threads++;
+            pthread_mutex_unlock(&stato.lock);
+
+            if(pthread_create(&tid, NULL, client_thread, cbot) != 0){
+                perror("Errore nella creazione del thread di gestione del bot");
+                pthread_mutex_lock(&stato.lock);
+                stato.active_threads--;
+                pthread_mutex_unlock(&stato.lock);
+                close(bot_fd);
+                free(cbot);
+                goto exit;
+            }
+            pthread_detach(tid);
+
+        }
+        
+        n++;
+    }
+
+    close(llisten);
+    
 
     if(n > 0){
         int i = 0;
 
+        pthread_mutex_lock(&stato.lock);
         for(player *p = stato.head; p!= NULL; p = p->next){
             // questo for serve per rinumerare gli id dei semafori perchè un client potrebbe scollegarsi anche in lobby
             p->sem_id = i++;
@@ -288,7 +340,7 @@ int main(int argc, char **argv){
 
         if(sem1 == -1){
             perror("Errore nella creazione del semaforo per i turni dei client connessi");
-            exit(EXIT_FAILURE);
+            goto exit;
         }
 
         for(int i = 0; i<n; i++){
@@ -307,7 +359,7 @@ int main(int argc, char **argv){
 try:
         if ((ret =semop(sem2, &sem, 1)) == -1 && errno != EINTR){
             perror("Errore nella semop");
-            exit(EXIT_FAILURE);
+            goto exit;
         } else if (ret == -1) goto try;
         
 
@@ -321,14 +373,12 @@ try:
 start:
         if((ret = semop(sem1, &startup, 1)) == -1 && errno != EINTR){
             perror("Errore nell'avviare i player");
-            exit(EXIT_FAILURE); // da sostituire mandando la routine di interrupt per chiusura
+            goto exit;
         }
 
-    } else {
-        pthread_mutex_unlock(&stato.lock);
     }
 
-    printf("[*] Partita avviata con successo, player 1 sbloccato, vado in background \n");
+    printf("[*] Partita avviata con successo, player 1 abilitato, vado in background \n");
     fflush(stdout);
     
     while(!shutdown_flag){
@@ -341,6 +391,7 @@ start:
         sleep(1);
     }
 
+exit:
     printf("\n[*] Routine di chiusura avviata. Pulizia risorse in corso...\n");
     fflush(stdout);
 
@@ -348,7 +399,7 @@ start:
 
     if (sem2 > 0) semctl(sem2, 0, IPC_RMID);
     
-    close(llisten);
+    if (llisten > 0) close(llisten);
 
     pthread_mutex_lock(&stato.lock);
     player *curr = stato.head, *temp;
@@ -457,6 +508,24 @@ gback:
     pthread_mutex_unlock(&stato.lock);
 
     if(!alive) goto exit;
+
+    pthread_mutex_lock(&stato.lock);
+    for(player *p  = stato.head; p != NULL; p = p->next){
+        if(p->id != id && p->alive){
+            azioni info;
+            memset(&info, 0 , sizeof(info));
+            info.type = INFO;
+            info.player_id = p->id;
+            strncpy(info.username, p->username, USERNAME-1);
+            if(send_msg(me->socket, &info) == -1){
+                printf("Errore nell'invio del pacchetto di informazioni agli altri player");
+                pthread_mutex_unlock(&stato.lock);
+                goto exit;
+            }
+        }
+    }
+    
+    pthread_mutex_unlock(&stato.lock);
 
     azioni turno;
     memset(&turno, 0, sizeof(turno));
@@ -939,7 +1008,3 @@ void chiusura (int sig){
     (void)sig;
     shutdown_flag = 1;
 }
-
-/*
-    TODO: aggiungere il bot qualora le connessioni siano 0
-*/

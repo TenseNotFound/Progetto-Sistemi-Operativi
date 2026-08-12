@@ -12,7 +12,7 @@
 #define USERNAME 17
 
 typedef enum game_info{ // serve poi per capire che mossa/azione è stata fatta/compiuta/subita sul client
-    WELCOME, JOIN, TURN, MOVE, HIT, MISS, ELIMINATED, WIN, MODE
+    WELCOME, JOIN, TURN, MOVE, HIT, MISS, ELIMINATED, WIN, MODE, INFO
 }game_info;
 
 typedef enum mode {

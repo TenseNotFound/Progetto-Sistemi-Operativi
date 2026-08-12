@@ -16,6 +16,15 @@ const nave ship_tipe[SHIP_NUMBER] = {
     {"Cacciatorpediniere", 2}
 };
 
+typedef struct bersagli{
+    int id;
+    char nome[USERNAME];
+    struct bersagli *next;
+}nemici;
+
+nemici *target = NULL;
+
+
 void gui_init(bool flag){
     clean_screen();
 
@@ -152,12 +161,49 @@ void connection_lost(void){
     fflush(stdout);
 }
 
+void bersagli(int id, char username){
+    // serve per aggiungere i nuovi nemici, si usa una lista a puntatori perchè a priori non so quanti bersagli ci sono
+    nemici *nemico = malloc(sizeof(nemici));
+
+    if(nemico == NULL){
+        perror("Errore nela malloc per allocare il nuovo nemico");
+        return;
+    }
+
+    nemico->id = id;
+    strcpy(nemico->nome, username);
+    
+    nemico->next = target;
+    target = nemico;
+}
+
 
 void turno() {
     printf("\n==================================================\n");
     printf(" [*] È IL TUO TURNO \n");
     printf("==================================================\n");
+
+    printf("\n--- BERSAGLI DISPONIBILI ---\n");
+    nemici *curr = target;
+    int i = 0;
+    while(curr != NULL) {
+        printf(" [%d] [ID: %d] %s\n",i+1 ,curr->id, curr->nome);
+        curr = curr->next;
+        i++;
+    }
+    printf("----------------------------\n");
     fflush(stdout);
+
+    // stampo i nomi che sono temporanei, quindi poi libero subito
+    curr = target;
+    nemici *temp;
+    while(curr != NULL) {
+        temp = curr;
+        curr = curr->next;
+        free(temp);
+    }
+    
+    target = NULL;
 }
 
 void ricezione_mossa(azioni *mossa) {
@@ -169,7 +215,7 @@ void ricezione_mossa(azioni *mossa) {
 
     while (!mossa_valida) {
         
-        printf("\nInserisci l'ID del giocatore da attaccare: ");
+        printf("\nInserisci l'ID del giocatore da colpire: ");
         scanf("%d", &bersaglio);
         fflush_stdin(); 
 

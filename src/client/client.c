@@ -169,7 +169,10 @@ int main(int argc, char **argv) {
 		}
 
 		switch(pck.type){
-			
+			case INFO:
+				bersagli(pck.player_id, pck.username);
+                break;
+
 			case TURN:
 				if(pck.player_id == mio_id){
 					turno();
