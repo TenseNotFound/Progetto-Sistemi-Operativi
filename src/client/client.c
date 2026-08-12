@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
 	gui_init(auto_mode);
 
 	struct sockaddr_in server_addr;
-	bzero(&server_addr, sizeof(server_addr));
+	memset(&server_addr, 0,sizeof(server_addr));
 	
 	int socketfd, mio_id;
 
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
 
 	//procedimento di handshake con il server
 	azioni msg;	
-	bzero(&msg, sizeof(msg));
+	memset(&msg, 0, sizeof(msg));
 	strncpy(msg.username, username, USERNAME-1);
 	msg.username[USERNAME -1] = '\0';
 	msg.type = JOIN;
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
 	server_connected(ip_buf, port, -1);
 
 	azioni mode_msg;
-	bzero(&mode_msg, sizeof(mode_msg));
+	memset(&mode_msg, 0, sizeof(mode_msg));
 	mode_msg.type = MODE;
 	mode_msg.player_id = mio_id;
 	mode_msg.gamemode = game_mode();
@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
 }
 
 int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
-	bzero(server_addr, sizeof(struct sockaddr_in));
+	memset(server_addr, 0, sizeof(struct sockaddr_in));
 	server_addr->sin_family = AF_INET;
 	server_addr->sin_port = htons(porta);
 
@@ -203,7 +203,7 @@ void getUsername(char *buf, size_t len){
 
 int send_msg(int fd, azioni *msg){
     azioni packet;
-	bzero(&packet, sizeof(packet));
+	memset(&packet, 0, sizeof(packet));
 
     //carico i dati in rete
     packet.type = htonl(msg->type);
@@ -353,7 +353,7 @@ int piazzamento_navi (int socket) {
 int invio_navi(int socket, posizionamento *navi){
 	for(int i = 0; i< SHIP_NUMBER; i++){
 		posizionamento p;
-		bzero(&p, sizeof(p)); //pulisco prima di inviare
+		memset(&p, 0, sizeof(p)); //pulisco prima di inviare
 		p.index = htonl(navi[i].index);
 		p.x = htonl(navi[i].x);
 		p.y = htonl(navi[i].y);
@@ -390,7 +390,7 @@ int discovery_server(char *ip, int *port){
     }
 
 	struct sockaddr_in broadcast;
-	bzero(&broadcast, sizeof(broadcast));
+	memset(&broadcast, 0, sizeof(broadcast));
 	broadcast.sin_family = AF_INET;
 	broadcast.sin_port = htons(DISCOVERY_PORT);
 	broadcast.sin_addr.s_addr = htonl(INADDR_BROADCAST);

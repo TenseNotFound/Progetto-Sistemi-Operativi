@@ -28,8 +28,13 @@ typedef game_info info;
 typedef azioni mosse;
 typedef struct players player;
 
-volatile sig_atomic_t timeout = 1, lobby_aperta = 1;shutdown_flag = 0;
-int port;           // eventualmente qua va poi dichiarato il semaforo
+volatile sig_atomic_t timeout = 1, lobby_aperta = 1, shutdown_flag = 0;
+int port, sem1 = 0, sem2 = 0, n = 0, fine = 0;           
+/*
+    sem1-> serve per i turni
+    sem2-> serve per dare il via libera a tutti dopo che anche l'ultimo client connesso ha finito di disporre le navi
+    n-> mi serve per il numero totali di gettoni che andranno nei semafori
+*/
 
 void *udp_discovery_port(void *args);
 void timeout_lobby(int sig);
@@ -39,12 +44,14 @@ int recv_msg(int fd, azioni *msg);
 int send_msg(int fd, azioni *msg);
 void *add_player(int fd, char *username);
 void remove_player(int id);
-player *trova_giocatore(int id); // serve per trovare un giocatore in base al suo id quando si vuole fare una 
+player *trova_giocatore(int valore, bool flag); // serve per trovare un giocatore in base al suo id quando si vuole fare una 
                                 // mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
+                                // si può cercare tramite id (flag = false) oppure sem_id (flag = true)
 ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete
 ssize_t writen(int fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete
-bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave); // serve per il check della formazione in entrata, INTEGRITY CHECK
+bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave, int indice); // serve per il check della formazione in entrata, INTEGRITY CHECK
 int ricezione_navi(int fd, player *me); // serve per ricevere la formazione che manda il client
+void broadcast(azioni *esito); // serve nel client_thread per fare le comunicazioni a tutti gli utenti 
 
 
 //serve perchè ho bisogno di passare più informazioni al thread, uso quindi una struttura
@@ -208,7 +215,15 @@ int main(int argc, char **argv){
         fflush(stdout);
 
     }
-    
+
+    sem2 = semget(IPC_PRIVATE, 1, IPC_CREAT|0664);
+    if(sem2 == -1){
+        perror("Errore nella creazione del semaforo per il controllo che tutti i player hanno terminato l'invio della formazione");
+        exit(EXIT_FAILURE);
+    }
+
+    semctl(sem2, 0, SETVAL, 0); // inizialmente ho 0 gettoni, poi mi faccio fare le post su questo semaforo e quando torna a 0 sblocco tutto
+
     printf("Lobby aperta per 30s\n");
     alarm(30);
  
@@ -256,52 +271,96 @@ int main(int argc, char **argv){
 
     lobby_aperta = 0;
     close(llisten);
-
-    /*
-          printf("\n[*] Chiusura del server in corso...\n");
-    fflush(stdout);
- 
     pthread_mutex_lock(&stato.lock);
- 
-    // sblocco eventuali recv()/read() bloccate nei thread client. shutdown()
-    // e' preferibile a close() qui: chiudere un fd usato da un altro thread
-    // e' una race condition, shutdown() invece sveglia in sicurezza chi e'
-    // bloccato in lettura senza invalidare subito il descrittore.
-    player *p = stato.head;
-    while (p != NULL) {
-        shutdown(p->socket, SHUT_RDWR);
-        p = p->next;
-    }
- 
-    // aspetto che i thread client terminino, con un timeout di sicurezza
-    // per non restare bloccati per sempre se qualcosa va storto
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += 5;
-    while (stato.active_threads > 0) {
-        if (pthread_cond_timedwait(&stato.cv, &stato.lock, &ts) == ETIMEDOUT) {
-            printf("[*] Timeout in attesa dei thread client, chiudo comunque\n");
-            break;
+    n = stato.count;
+
+    if(n > 0){
+        int i = 0;
+
+        for(player *p = stato.head; p!= NULL; p = p->next){
+            // questo for serve per rinumerare gli id dei semafori perchè un client potrebbe scollegarsi anche in lobby
+            p->sem_id = i++;
         }
+
+        pthread_mutex_unlock(&stato.lock);
+
+        sem1 = semget(IPC_PRIVATE, n, IPC_CREAT|0664);
+
+        if(sem1 == -1){
+            perror("Errore nella creazione del semaforo per i turni dei client connessi");
+            exit(EXIT_FAILURE);
+        }
+
+        for(int i = 0; i<n; i++){
+            semctl(sem1, i, SETVAL, 0);
+        }
+
+        printf("[*] Lobby chiusa, ricezione nuove richieste di partecipazione bloccate\n");
+        fflush(stdout);
+
+        int ret;
+        struct sembuf sem;
+        sem.sem_flg = 0;
+        sem.sem_op = -n; // -n così mi fanno le post e torna a 0
+        sem.sem_num = 0;
+
+try:
+        if ((ret =semop(sem2, &sem, 1)) == -1 && errno != EINTR){
+            perror("Errore nella semop");
+            exit(EXIT_FAILURE);
+        } else if (ret == -1) goto try;
+        
+
+        printf("[*] Startup della partita\n");
+
+        struct sembuf startup;
+        startup.sem_flg = 0;
+        startup.sem_num = 0;
+        startup.sem_op = 1;
+
+start:
+        if((ret = semop(sem1, &startup, 1)) == -1 && errno != EINTR){
+            perror("Errore nell'avviare i player");
+            exit(EXIT_FAILURE); // da sostituire mandando la routine di interrupt per chiusura
+        }
+
+    } else {
+        pthread_mutex_unlock(&stato.lock);
     }
- 
-    // libero la lista dei giocatori e chiudo eventuali socket rimasti aperti
-    player *cur = stato.head;
-    while (cur != NULL) {
-        player *next = cur->next;
-        close(cur->socket);
-        free(cur);
-        cur = next;
+
+    printf("[*] Partita avviata con successo, player 1 sbloccato, vado in background \n");
+    fflush(stdout);
+    
+    while(!shutdown_flag){
+        pthread_mutex_lock(&stato.lock);
+        int attivi = stato.active_threads;
+        pthread_mutex_unlock(&stato.lock);
+        
+        if (attivi == 0) break;
+
+        sleep(1);
     }
-    stato.head = NULL;
- 
+
+    printf("\n[*] Routine di chiusura avviata. Pulizia risorse in corso...\n");
+    fflush(stdout);
+
+    if (sem1 > 0) semctl(sem1, 0, IPC_RMID);
+
+    if (sem2 > 0) semctl(sem2, 0, IPC_RMID);
+    
+    close(llisten);
+
+    pthread_mutex_lock(&stato.lock);
+    player *curr = stato.head, *temp;
+    while (curr != NULL) {
+        temp = curr;
+        curr = curr->next;
+        free(temp);
+    }
+    stato.head = NULL; 
     pthread_mutex_unlock(&stato.lock);
-    pthread_mutex_destroy(&stato.lock);
-    pthread_cond_destroy(&stato.cv);
- 
-    printf("[*] Server chiuso correttamente\n");
- 
-    */
+    
+    printf("[*] Server chiuso correttamente!\n");
     return 0;
 }
 
@@ -321,7 +380,7 @@ void *client_thread(void *args){
     fflush(stdout);
 
     azioni msg;
-    bzero(&msg, sizeof(msg));
+    memset(&msg, 0, sizeof(msg));
 
     if(recv_msg(cargs->client_fd, &msg) != 0 || msg.type != JOIN){
         printf("(Server) handshake non validato per %s:%d\n", ip, portc);
@@ -359,22 +418,188 @@ void *client_thread(void *args){
 
     printf("[*] Formazione ricevuta correttamente (%s)!\n", me->username);
     fflush(stdout);
-    /*
-        SE IL THREAD DEVE MORIRE QUINDI return NULL; copia e incolla questo
+
+    struct sembuf ready;
+    ready.sem_flg = 0;
+    ready.sem_num = 0;
+    ready.sem_op = 1;
+
+    int ret;
+
+post:
+    if((ret = semop(sem2, &ready, 1)) == -1 && errno != EINTR){
+        perror("Impossibile segnalare l'avvenuta ricezione in sem2");
+        goto exit;
+    } else if(ret == -1) goto post;
+
+    
+while(1){
+    struct sembuf sem;
+    sem.sem_flg = 0;
+    sem.sem_num = me->sem_id;
+    sem.sem_op = -1;
+
+gback:
+    if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){  
+        perror("Errore nel prendere il gettone");
+        goto exit;
+    } else if(ret == -1) goto gback;
+
+
+    if (fine) goto exit;
+
+    pthread_mutex_lock(&stato.lock);
+    int id = me->id;
+    int alive = me->alive;
+    int semid = me->sem_id;
+    char username[USERNAME];
+    strncpy(username, me->username, USERNAME);
+    pthread_mutex_unlock(&stato.lock);
+
+    if(!alive) goto exit;
+
+    azioni turno;
+    memset(&turno, 0, sizeof(turno));
+    turno.type = TURN;
+    turno.player_id = id;
+    if(send_msg(fd, &turno) == -1){
+        printf("Errore nel comunicare il turno a %s\n, rimuovo il player\n", username);
+        fflush(stdout);
         pthread_mutex_lock(&stato.lock);
-        stato.active_threads--; 
+        me->alive = 0;
         pthread_mutex_unlock(&stato.lock);
-        IL MUTEX SERVE SOLO NELLE ZONE NON PROTETTE, SE GIà PROTETTA OK
-                                METTI goto exit;
-    */
+        goto exit;
+    }
+
+    azioni mossa;
+    if(recv_msg(fd, &mossa) == -1 || mossa.type != MOVE){
+        printf("è stata ricevuta una mossa non valida oppure è stata persa la connessione da %s:%d, rimuovo il player\n", username, id);
+        fflush(stdout);
+        pthread_mutex_lock(&stato.lock);
+        me->alive = 0;
+        pthread_mutex_unlock(&stato.lock);
+        goto next_turn; 
+    }
+
+    pthread_mutex_lock(&stato.lock);
+    player *bersaglio = trova_giocatore(mossa.target_id, false);
+    pthread_mutex_unlock(&stato.lock);
+    
+    azioni esito;
+    memset(&esito, 0, sizeof(esito));
+    esito.player_id = id;
+    esito.target_id = mossa.target_id;
+    esito.x = mossa.x;
+    esito.y = mossa.y;
+    bool eliminato = false;
+
+    if(bersaglio == NULL || !bersaglio->alive || mossa.x < 0 || mossa.y < 0 || mossa.x >= GRID_SIZE || mossa.y >= GRID_SIZE){
+        printf("Bersaglio specificato o coordinate ricevute non valide\n");
+        fflush(stdout);
+        esito.type = MISS;
+    } else {
+        pthread_mutex_lock(&stato.lock); // per fare i controlli in sicurezza
+        char cella = bersaglio->griglia[mossa.x][mossa.y];
+        bool colpito = (cella >= '0' && cella <= '4');
+
+        if(colpito){
+            bersaglio->griglia[mossa.x][mossa.y] = 'X';
+            esito.type = HIT;
+            bool affondata = true;
+            for(int i = 0; i<GRID_SIZE; i++){
+                for(int j = 0; j<GRID_SIZE; j++){
+
+                    if(bersaglio->griglia[i][j] == cella){ // se trovo un altro elemento di quella nave, vuol dire che ancora non è affondata
+                        affondata = false;
+                        break;
+                    }
+                }
+                if(!affondata) break; // nel caso abbia già trovato una nave esco 
+            }
+
+            if(affondata){
+                bersaglio->navi_rimaste--;
+                printf("[*] Il giocatore %s:%d ha affondato la nave di %s:%d!\n", username, id, bersaglio->username, bersaglio->id);
+
+                if(bersaglio->navi_rimaste <= 0){
+                    bersaglio->alive = 0;
+                    eliminato = true;
+                }
+
+            }
+            
+        } else {
+            esito.type = MISS;
+            if(bersaglio->griglia[mossa.x][mossa.y] == '~') {
+                bersaglio->griglia[mossa.x][mossa.y] = 'O'; 
+            }
+        }
+        pthread_mutex_unlock(&stato.lock);
+    }
+
+    pthread_mutex_lock(&stato.lock); 
+    
+    broadcast(&esito);
+
+    pthread_mutex_unlock(&stato.lock);
+
+    if(eliminato){
+        azioni gameover;
+        memset(&gameover, 0, sizeof(gameover));
+        gameover.type = ELIMINATED;
+        gameover.target_id = bersaglio->id;
+        
+        pthread_mutex_lock(&stato.lock); 
+        // comunico a TUTTI i player collegati l'esito delle mosse, qui solo quelle con eliminated
+
+        broadcast(&gameover);
+
+        pthread_mutex_unlock(&stato.lock);
+    }
 
 
-    /*
-        DA FARE: ricezione delle mosse e gestione del gioco, invio dei messaggi di risposta ai client
-    */
+    pthread_mutex_lock(&stato.lock);
 
+    // poichè a priori non so se il prossimo giocatore è stato eliminato, devo trovare il prossimo ancora vivo e poi passare l'id alla sembuf
+next_turn:
+    int prossimo = -1; 
+    int test = semid;
+    for(int i = 0; i<n; i++){
+        test = (test +1) %n;
+        player *p = trova_giocatore(test, true); // true specifica se ricerca per numero di semaforo, false solo con id
+        if(p != NULL && p->alive){  
+            prossimo = test;
+            break;
+        }
+    }
 
+    pthread_mutex_unlock(&stato.lock);
+    
+    if(prossimo == -1){
+        fine = 1;
+        azioni win; 
+        memset(&win, 0, sizeof(win));
+        win.type = WIN;
+        win.player_id = id;
 
+        pthread_mutex_lock(&stato.lock);
+
+        broadcast(&win);
+
+        pthread_mutex_unlock(&stato.lock);
+        goto exit;
+
+    }
+    sem.sem_op = 1;
+    sem.sem_num = prossimo;
+
+pass: 
+    if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){
+        perror("Errore nel rilasciare il gettone del semaforo al prossimo player");
+        goto exit;
+    } else if(ret == -1) goto pass;
+}
+    
 
 exit:
     pthread_mutex_lock(&stato.lock);
@@ -393,7 +618,7 @@ exit:
 
 int send_msg(int fd, azioni *msg){
     azioni packet;
-    bzero(&packet, sizeof(packet));
+    memset(&packet, 0, sizeof(packet));
 
     //carico i dati in rete
     packet.type = htonl(msg->type);
@@ -509,7 +734,7 @@ void *add_player(int fd, char *username){
 
     stato.next_id++;
     new_player->id = stato.next_id;
-    new_player->sem_id = new_player->id;
+    new_player->sem_id = new_player->id -1;
 
     new_player->next = stato.head;
     stato.head = new_player;
@@ -535,18 +760,27 @@ void remove_player(int id){
             stato.count--;
             printf("[*] Giocatore %d (%s) rimosso con successo!", curr->id, curr->username);
             free(curr);
-            return NULL;
+            return;
         }
         prev = curr;
         curr = curr->next;
     }
+    return;
 }
 
-player *trova_giocatore(int id){
+player *trova_giocatore(int valore, bool flag){
+    // permette di trovare un giocatore tramite id (con flag = false) oppure sem_id (con flag = true)
     player *current = stato.head;
+    int mode;
 
     while(current != NULL){
-        if(current->id == id){
+        if(flag){
+            mode = current->sem_id;
+        } else {
+            mode = current->id;
+        }
+
+        if(mode == valore){
             return current;
         }
         current = current->next;
@@ -612,11 +846,12 @@ void *udp_discovery_port(void *args){
     pthread_exit(NULL);
 }
 
-bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave){
+bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave, int indice){
     // la funzione si occupa di controllare e validare il piazzamento andando a controllare i limiti di griglia 
 	// marcando quale posizione risulta occupata, non è il controllo ufficiale ma serve solo in fase di posizionamento
 	// il vero controllo poi lo rifarà anche il server.
     // funzione del tutto analoga a quella che c'è in client.c
+    // indice indica quale nave è arrivata
     int delta_riga, delta_colonna, r, c;
 	
 	if ( orientazione == 'N' ) { delta_riga = -1; delta_colonna = 0;}
@@ -639,7 +874,7 @@ bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char
 	for ( int i = 0; i < dimensione_nave; i++ ) {
 		r = x + i * delta_riga;
 		c = y + i * delta_colonna;
-		board[r][c] = 'N'; 
+		board[r][c] = '0' + indice; 
 	}
 	return true;
 }
@@ -671,7 +906,7 @@ int ricezione_navi (int fd, player *me){
             printf("Indice della nave errato");
             return -1;
         }
-        if(!validazione_formazione(me->griglia, x, y, orientazione, ship_tipe[i].size)){
+        if(!validazione_formazione(me->griglia, x, y, orientazione, ship_tipe[i].size, i)){
             printf("Inserimento della nave non valido");
             return -1;
         }
@@ -680,6 +915,15 @@ int ricezione_navi (int fd, player *me){
 
     return 0;
 
+}
+
+void broadcast(azioni *esito){
+    // serve per le comunicazioni di esiti a tutti i player, da utilizzare sotto mutex di stato.lock
+    for(player *p = stato.head; p != NULL; p = p->next){
+        if(send_msg(p->socket, &esito) == -1){
+            printf("Impossibile inviare il messaggio di esito al giocatore %s:%d\n", p->username, p->id);
+        }
+    }
 }
 
 /*
