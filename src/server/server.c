@@ -345,7 +345,7 @@ void *client_thread(void *args){
 
     /*
         FARE LA RIMOZIONE DI me QUANDO IL THREAD STA PER CHIUDERSI
-            
+
     */
 
 
@@ -643,7 +643,7 @@ int ricezione_navi (int fd, player *me){
     char orientazione;
     for(int i = 0; i<SHIP_NUMBER; i++){
         posizionamento p; 
-        memset(&p, sizeof(p), 0);
+        memset(&p, 0, sizeof(p));
         if(readn(fd, &p, sizeof(p))<0){
             perror("Errore nella ricezione della formazione ");
             return -1;
