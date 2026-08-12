@@ -931,9 +931,11 @@ void broadcast(azioni *esito){
 */
 
 void timeout_lobby(int sig){
+    (void)sig;
     timeout = 0;
 }
 
 void chiusura (int sig){
+    (void)sig;
     shutdown_flag = 1;
 }
