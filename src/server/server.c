@@ -939,3 +939,7 @@ void chiusura (int sig){
     (void)sig;
     shutdown_flag = 1;
 }
+
+/*
+    TODO: aggiungere il bot qualora le connessioni siano 0
+*/

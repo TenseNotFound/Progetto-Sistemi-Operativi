@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-static char grid[GRID_SIZE][GRID_SIZE];
-static char target_grid[GRID_SIZE][GRID_SIZE];
+char grid[GRID_SIZE][GRID_SIZE];
+char target_grid[GRID_SIZE][GRID_SIZE];
 
 const nave ship_tipe[SHIP_NUMBER] = {
     {"Portaerei", 5},
@@ -133,14 +133,124 @@ int game_mode(){
     printf("   [2] Default [Premi invio o qualsiasi altro tasto]\n");
     fflush(stdout);
 
-    if(fgets(stdin, sizeof(input), input) == NULL){
+    if(fgets(input, sizeof(input), stdin) == NULL){
         return MODE_DEFAULT;
     }
 
     input[strlen(input)-1] = '\0';
 
-    if(strcpm(input, '1') == 0){
+    if(strcpm(input, "1") == 0){
         return MODE_1V1;
     } 
     return MODE_DEFAULT;
+}
+
+void connection_lost(void){
+
+    printf("\n[!] Connessione al server persa\n");
+    fflush(stdout);
+}
+
+
+void turno() {
+    printf("\n==================================================\n");
+    printf(" [*] È IL TUO TURNO \n");
+    printf("==================================================\n");
+    fflush(stdout);
+}
+
+void ricezione_mossa(azioni *mossa) {
+    int bersaglio, y;
+    char x_in;
+    bool mossa_valida = false;
+
+    mossa->type = MOVE;
+
+    while (!mossa_valida) {
+        
+        printf("\nInserisci l'ID del giocatore da attaccare: ");
+        scanf("%d", &bersaglio);
+        fflush_stdin(); 
+
+        printf("Inserisci le coordinate <Y> <n>: ");
+        scanf(" %c %d", &x_in, &y);
+        fflush_stdin();
+
+        y = y - 1;
+        int x = -1;
+
+        if (x_in >= 'a' && x_in <= 'j') x = x_in - 'a'; // CAST ASCII -> 'a' = 97; 'A' = 65
+        else if (x_in >= 'A' && x_in <= 'J') x = x_in - 'A';
+
+        if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+            // verifica se le coordinate sono nei limiti
+            if (target_grid[x][y] == 'X' || target_grid[x][y] == 'O') {
+                printf("[!] Hai già sparato in queste coordinate. Scegli un altro bersaglio!\n");
+            } else {
+                mossa->target_id = bersaglio;
+                mossa->x = x;
+                mossa->y = y;
+                mossa_valida = true;
+            }
+        } else {
+            printf("[!] Coordinate non valide. Devi inserire Lettera (A-J) e Numero (1-10).\n");
+        }
+    }
+}
+
+void errore_inivo_mossa() { 
+    printf("\n[!] Errore: Impossibile inviare la mossa al server.\n");
+    fflush(stdout);
+}
+
+void non_mio_turno(int id) {
+    printf("\n[*] È il turno del giocatore %d. In attesa...\n", id);
+    fflush(stdout);
+}
+
+void colpito() {
+    printf("\n[+] BERSAGLIO COLPITO!\n");
+    fflush(stdout);
+}
+
+void miss() {
+    printf("\n[-] Mancato!\n");
+    fflush(stdout);
+}
+
+void spettatore(azioni *pck) {
+    char esito_str[20];
+    if (pck->type == HIT) strcpy(esito_str, "COLPITO");
+    else strcpy(esito_str, "MANCATO");
+    
+    printf("\n[*] Il giocatore %d ha sparato al giocatore %d in %c%d: %s!\n", 
+            pck->player_id, pck->target_id, pck->x + 'A', pck->y + 1, esito_str);
+    fflush(stdout);
+}
+
+void s_elimitato() {
+    printf("\n==================================================\n");
+    printf(" [!] SEI STATO ELIMINATO! LA TUA FLOTTA È AFFONDATA [!]\n");
+    printf("==================================================\n");
+    printf("[*] Rimani in attesa per guardare il resto della partita.\n");
+    fflush(stdout);
+}
+
+void eliminato(int id) {
+    printf("\n[!] IL GIOCATORE %d È STATO ELIMINATO!\n", id);
+    fflush(stdout);
+}
+
+void s_vittoria() {
+    printf("\n==================================================\n");
+    printf(" [*] VITTORIA! SEI IL DOMINATORE DEI MARI! [*] \n");
+    printf("==================================================\n");
+    fflush(stdout);
+}
+
+void vittoria(int id) {
+    printf("\n==================================================\n");
+    printf(" [*] LA PARTITA È CONCLUSA! HA VINTO IL GIOCATORE %d [*] \n", id);
+    printf("==================================================\n");
+    fflush(stdout);
 }

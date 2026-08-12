@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+extern char grid[GRID_SIZE][GRID_SIZE];
+extern char target_grid[GRID_SIZE][GRID_SIZE];
 
 void gui_init(bool flag);
 void init_board();
@@ -13,6 +15,20 @@ void addboat(int x, int y, char orientazione, int size);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);
 void server_connected(char *ip, int port, int id);
 int game_mode();
+void turno(void);
+void ricezione_mossa(azioni *buff);
+void errore_invio_mossa(void);
+void non_mio_turno(int idin);
+void colpito(void);
+void miss(void);
+void s_colpito(void);
+void s_miss(void);
+void spettatore(azioni *pyl);
+void s_eliminato(void);
+void eliminato(int id);
+void s_vittoria(void);
+void vittoria(int id);
+void connection_lost(void);
 void draw_grids();
 
 void clean_screen();

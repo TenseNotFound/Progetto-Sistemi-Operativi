@@ -25,7 +25,9 @@
 #include <string.h>
 #include <stdbool.h>
 
+volatile sig_atomic_t shutdown = 0;
 
+void gestore(int sig);
 int discovery_server(char *ip, int *port); // serve qualora non passo argomenti in esecuzione o qualora il server non sia raggiungibile con i parametri specificati
 int recv_msg(int fd, azioni *msg);
 int send_msg(int fd, azioni *msg);
@@ -43,8 +45,6 @@ struct posizionamento Nave;
 int port;
 
 
-// la validazione viene fatta dal server
-
 int main(int argc, char **argv) {
 
 	char ip_buf[16] = {0};
@@ -55,30 +55,38 @@ int main(int argc, char **argv) {
 		auto_mode = true;
 		if(discovery_server(ip_buf, &port) == -1){
 			printf("Errore nel discovery del server, inserisci manualmente ip e porta\n Sintassi: %s <IP> <port>\n", argv[0]);
-			return -1;
+			goto chiusura;
 		}
 		fflush(stdout);
 
 	} else if(argc <3){
 		printf("Sintassi corretta: %s <IP> <port>\n", argv[0]);
-		return -1;
+		goto chiusura;
 	} else {
 		port = atoi(argv[2]);
 		if(port < 5000 || port >65535){
 			printf("Inserisci un numero di porta valido nel range 5000-65535\n");
-			return -1;
+			goto chiusura;
 		}
 		strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
 	}
 
+	struct sigaction sa;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_handler = gestore;
+	sa.sa_flags = 0;
 
-	// TODO: fallback qualora port e ip non siano corretti
+	if(sigaction(SIGINT, &sa, NULL) == -1 || sigaction(SIGTERM, &sa, NULL) == -1){
+		perror("Errore nell'installaziuone della sigaction");
+		goto chiusura;
+	}
+
 	gui_init(auto_mode);
 
 	struct sockaddr_in server_addr;
 	memset(&server_addr, 0,sizeof(server_addr));
 	
-	int socketfd, mio_id;
+	int socketfd = -1, mio_id = -1;
 
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
@@ -91,7 +99,7 @@ int main(int argc, char **argv) {
 		fflush(stdout);
 		if(discovery_server(ip_buf, &port) == -1){
 			printf("Errore: impossibile trovare un server\n");
-			return -1;
+			goto chiusura;
 		}
 
 		socketfd = connetti(ip_buf, port, &server_addr);
@@ -99,7 +107,7 @@ int main(int argc, char **argv) {
 
 	if(socketfd == -1){
 		printf("Impossibile stabilire una connessione con il server\n");
-		exit(EXIT_FAILURE);
+		goto chiusura;
 	}
 
 	char username[USERNAME];
@@ -113,26 +121,23 @@ int main(int argc, char **argv) {
 	msg.type = JOIN;
 	if(send_msg(socketfd, &msg) == -1){
 		perror("errore nell'invio del messaggio di JOIN");
-		close(socketfd);
-		return -1;
+		goto chiusura;
 	}
 
 	azioni welcome_msg;
 	if(recv_msg(socketfd, &welcome_msg) == -1){
 		perror("errore nella ricezione del messaggio di WELCOME");
-		close(socketfd);
-		return -1;
+		goto chiusura;
 	}
 
 	if(welcome_msg.type != WELCOME){
 		printf("messaggio di benvenuto non valido\n");
-		close(socketfd);
-		return -1;
+		goto chiusura;
 	}
 
 	// ok handshake, il server mi ha assegnato un id
 	mio_id = welcome_msg.player_id;
-	server_connected(ip_buf, port, -1);
+	server_connected(ip_buf, port, mio_id);
 
 	azioni mode_msg;
 	memset(&mode_msg, 0, sizeof(mode_msg));
@@ -142,18 +147,114 @@ int main(int argc, char **argv) {
 
 	if(send_msg(socketfd, &mode_msg) == -1){
 		perror("errore nell'invio della modalità di gioco");
-		close(socketfd);
-		return -1;
+		goto chiusura;
 	}
 
 
 	init_board();
-
-
 	piazzamento_navi(socketfd);
+
+	printf("\n[*] In attesa che tutti i giocatori siano pronti...\n");
+    fflush(stdout);
+
+	azioni pck;
+	bool vivo = true;
+	char esito;
+
+	while(vivo && !shutdown){
+		memset(&pck, 0, sizeof(pck));
+		if(recv_msg(socketfd, &pck) == -1){
+			connection_lost();
+			break;
+		}
+
+		switch(pck.type){
+			
+			case TURN:
+				if(pck.player_id == mio_id){
+					turno();
+
+					azioni mossa;
+					mossa.player_id = mio_id;
+
+					ricezione_mossa(&mossa);
+
+					if(send_msg(socketfd, &mossa) == -1){
+						errore_inivo_mossa();
+					}
+
+				} else {
+					non_mio_turno(pck.player_id);
+				}
+			
+			case HIT:
+			case MISS:
+				if(pck.player_id == mio_id){
+					if(pck.type == HIT){
+						esito = 'X';
+					} else esito = 'O';
+
+					clean_screen();
+					draw_grids();
+					target_grid[pck.x][pck.y] = esito;
+
+					if(pck.type == HIT){
+						colpito();
+					} else miss();
+
+				} else if(pck.target_id == mio_id){
+
+					if(pck.type == MISS){
+						esito = 'O';
+					} else esito = 'X';
+
+					target_grid[pck.x][pck.y] = esito;
+					clean_screen();
+					draw_grids();
+
+					if(pck.type == HIT){
+						colpito();
+					} else miss();
+
+
+				} else {
+					spettatore(&pck);
+				}
+				break;
+
+			
+			case ELIMINATED:
+				if(pck.target_id == mio_id){
+					s_elimitato();
+				} else {
+					eliminato(pck.target_id);
+				}
+				break;
+			
+			case WIN:
+				if(pck.player_id == mio_id){
+					s_vittoria();
+				} else {
+					vittoria(pck.player_id);
+				}
+				vivo = false;
+			default:
+				break;
+
+		}
+	}
+
+chiusura:
+
+	if(shutdown){
+		printf("\n [!] Chiusura forzata del client, inizio routine di shutdown...\n");
+		fflush(stdout);
+	}
+
+	if(socketfd > 0) close(socketfd);
+	close_game();
 	
-	
-	close(socketfd);
+
 	return 0;
 }
 
@@ -267,7 +368,10 @@ ssize_t readn(int fd, void *buf, size_t n){
     while(left >0){
         ssize_t r = read(fd, p, left);
         if(r<0){
-            if(errno == EINTR) continue;
+            if(errno == EINTR){  // lettura bloccata da segnalazione, riprovo
+				if(shutdown) return -1;
+				continue;
+			}
             return -1;
         }
         if (r == 0) return (ssize_t)(n - left); // il client ha chiuso la connessione, analogo chiusura PIPE
@@ -288,7 +392,10 @@ ssize_t writen(int fd, const void *buff, size_t n){
     while(left > 0){ // > e non < perchè è unisgned e non può essere negativo
         ssize_t w = write(fd, p, left);
         if(w<0){
-            if(errno == EINTR)continue; // scrittura bloccata da segnalazione, riprovo
+            if(errno == EINTR){ // scrittura bloccata da segnalazione, riprovo
+				if(shutdown) return -1;
+				continue;
+			}
             return -1;
         } if(w == 0) return (ssize_t)(n - left); // il client ha chiuso la connessione, analogo chiusura PIPE
         left -= (size_t)w;
@@ -310,7 +417,6 @@ int piazzamento_navi (int socket) {
 	bool occupata[GRID_SIZE][GRID_SIZE] = {false}, valid; // griglia temporanea per capire dove ho messo le navi
 
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
-		fflush_stdin();
 		draw_grids();
 		do {
 			printf("Inserisci le coordinate della nave %s (dimensione %d) e l'orientamento (N,S,E,O):\n", ship_tipe[i].name, ship_tipe[i].size);
@@ -320,6 +426,7 @@ int piazzamento_navi (int socket) {
 				fflush_stdin();
 			}
 
+			fflush_stdin();
 			valid = validazione(occupata, x - 1, y - 1, orientazione, ship_tipe[i].size);
 			if (!valid) {
 				printf("Posizionamento non valido: la nave esce dalla griglia o si sovrappone a un'altra nave. Riprova.\n");
@@ -466,4 +573,9 @@ bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazi
 		board[r][c] = true; 
 	}
 	return true;
+}
+
+void gestore(int sig){
+	(void)sig;
+	shutdown = 1;
 }
