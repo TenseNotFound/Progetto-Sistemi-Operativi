@@ -36,7 +36,6 @@ ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta 
 ssize_t writen(int fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete 
 int piazzamento_navi (int socket);
 int invio_navi(int socket, posizionamento *navi);
-void udp_handler(int sig);
 void getUsername(char *buf, size_t len); // per prendere l'username del nuovo giocatore
 bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
 
