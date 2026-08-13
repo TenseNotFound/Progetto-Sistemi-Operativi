@@ -43,6 +43,8 @@ typedef struct navi{
 } nave;
 
 extern const nave ship_tipe[SHIP_NUMBER]; // così non creo 3 blocchi di memoria identica 
+                                          // serve const così non ci sono problemi di scrittura quindi sincronizzazione
+                                          // è read-only 
 
 void fflush_stdin();
 
