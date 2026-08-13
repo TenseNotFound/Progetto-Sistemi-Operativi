@@ -575,6 +575,6 @@ bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazi
 }
 
 void gestore(int sig){
-	(void)sig;
+	//(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
 	shutdown_flag = 1;
 }

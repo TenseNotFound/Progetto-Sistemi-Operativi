@@ -1010,11 +1010,11 @@ void broadcast(azioni *esito){
 */
 
 void timeout_lobby(int sig){
-    (void)sig;
+    //(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
     timeout = 0;
 }
 
 void chiusura (int sig){
-    (void)sig;
+    //(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
     shutdown_flag = 1;
 }
