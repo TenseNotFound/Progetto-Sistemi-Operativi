@@ -270,7 +270,6 @@ int main(int argc, char **argv){
     }
 
     lobby_aperta = 0;
-    close(llisten);
     pthread_mutex_lock(&stato.lock);
     n = stato.count;
     pthread_mutex_unlock(&stato.lock);
@@ -459,6 +458,17 @@ void *client_thread(void *args){
     }
 
     printf("Giocatore %d (\"%s\") connesso da %s:%d\n", me->id, msg.username, ip, portc);
+
+    azioni gamemode;
+    memset(&gamemode, 0, sizeof(gamemode));
+    if(recv_msg(fd, &gamemode) != 0 && gamemode.gamemode != MODE){
+        /*
+            IMPLEMENTARE UN HANDLE PER LA GAMEMODE
+        */
+        printf("[!] Errore nella ricezione della gamemode dal client %s:%d", ip, port);
+        goto exit;
+    }
+
     printf("[*] In attesa della formazione da %s:%d (ID: %d)", ip, portc, me->id);
     fflush(stdout);
 
