@@ -32,5 +32,7 @@ void draw_grids();
 void clean_screen();
 void close_game();
 
+void fflush_stdin(void); // serve per pulire il buffer di input, così da evitare che rimangano caratteri in stdin, visto che fflush(stdin) non esiste, lo creo io
+
 
 #endif

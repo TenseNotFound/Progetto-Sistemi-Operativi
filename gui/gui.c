@@ -296,3 +296,8 @@ void vittoria(int id) {
     printf("==================================================\n");
     fflush(stdout);
 }
+
+void fflush_stdin(void){
+	int c;
+	while((c = getchar()) != '\n' && c != EOF);
+}

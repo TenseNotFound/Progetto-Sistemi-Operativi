@@ -46,6 +46,4 @@ extern const nave ship_tipe[SHIP_NUMBER]; // così non creo 3 blocchi di memoria
                                           // serve const così non ci sono problemi di scrittura quindi sincronizzazione
                                           // è read-only 
 
-void fflush_stdin();
-
 #endif

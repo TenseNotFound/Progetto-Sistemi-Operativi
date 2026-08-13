@@ -33,14 +33,12 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr);
 int recv_msg(int fd, azioni *msg);
 int send_msg(int fd, azioni *msg);
 ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete
-ssize_t writen(int fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete
-void fflush_stdin(void); // serve per pulire il buffer di input, così da evitare che rimangano caratteri in stdin, visto che fflush(stdin) non esiste, lo creo io
+ssize_t writen(int fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete 
 int piazzamento_navi (int socket);
 int invio_navi(int socket, posizionamento *navi);
 void udp_handler(int sig);
 void getUsername(char *buf, size_t len); // per prendere l'username del nuovo giocatore
 bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
-
 
 struct posizionamento Nave;
 int port;
@@ -408,11 +406,6 @@ ssize_t writen(int fd, const void *buff, size_t n){
         p += w;
     }
     return (ssize_t)n; // se arrivo qui ho scritto tutti i byte richiesti e comunico con n
-}
-
-void fflush_stdin(void){
-	int c;
-	while((c = getchar()) != '\n' && c != EOF);
 }
 
 int piazzamento_navi (int socket) {
