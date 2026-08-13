@@ -25,10 +25,11 @@
 #include <string.h>
 #include <stdbool.h>
 
-volatile sig_atomic_t shutdown = 0;
+volatile sig_atomic_t shutdown_flag = 0;
 
 void gestore(int sig);
 int discovery_server(char *ip, int *port); // serve qualora non passo argomenti in esecuzione o qualora il server non sia raggiungibile con i parametri specificati
+int connetti(char *ip, int porta, struct sockaddr_in *server_addr);
 int recv_msg(int fd, azioni *msg);
 int send_msg(int fd, azioni *msg);
 ssize_t readn(int fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete
@@ -161,7 +162,7 @@ int main(int argc, char **argv) {
 	bool vivo = true;
 	char esito;
 
-	while(vivo && !shutdown){
+	while(vivo && !shutdown_flag){
 		memset(&pck, 0, sizeof(pck));
 		if(recv_msg(socketfd, &pck) == -1){
 			connection_lost();
@@ -251,7 +252,7 @@ int main(int argc, char **argv) {
 
 chiusura:
 
-	if(shutdown){
+	if(shutdown_flag){
 		printf("\n [!] Chiusura forzata del client, inizio routine di shutdown...\n");
 		fflush(stdout);
 	}
@@ -374,7 +375,7 @@ ssize_t readn(int fd, void *buf, size_t n){
         ssize_t r = read(fd, p, left);
         if(r<0){
             if(errno == EINTR){  // lettura bloccata da segnalazione, riprovo
-				if(shutdown) return -1;
+				if(shutdown_flag) return -1;
 				continue;
 			}
             return -1;
@@ -398,7 +399,7 @@ ssize_t writen(int fd, const void *buff, size_t n){
         ssize_t w = write(fd, p, left);
         if(w<0){
             if(errno == EINTR){ // scrittura bloccata da segnalazione, riprovo
-				if(shutdown) return -1;
+				if(shutdown_flag) return -1;
 				continue;
 			}
             return -1;
@@ -511,6 +512,7 @@ int discovery_server(char *ip, int *port){
 	fflush(stdout);
 
 	struct sockaddr_in ricezione;
+	socklen_t ricezione_s = sizeof(ricezione); // serve necessariamente perchè la recvfrom vuole un puntatore alla dim della struttura (man)
 	char buffer[BUFFER_SIZE];
 
 	ssize_t n;
@@ -523,7 +525,7 @@ int discovery_server(char *ip, int *port){
 			return -1;
 		}
 
-		n = recvfrom(sock, buffer, sizeof(buffer) -1 , 0, (struct sockaddr *)&ricezione, sizeof(ricezione));
+		n = recvfrom(sock, buffer, sizeof(buffer) -1 , 0, (struct sockaddr *)&ricezione, &ricezione_s);
 
 		if (n > 0) {
             buffer[n] = '\0';
@@ -582,5 +584,5 @@ bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazi
 
 void gestore(int sig){
 	(void)sig;
-	shutdown = 1;
+	shutdown_flag = 1;
 }
