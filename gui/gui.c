@@ -8,6 +8,8 @@
 char grid[GRID_SIZE][GRID_SIZE];
 char target_grid[GRID_SIZE][GRID_SIZE];
 
+
+// spostare poi in protocollo.c
 const nave ship_tipe[SHIP_NUMBER] = {
     {"Portaerei", 5},
     {"Corazzata", 4},
@@ -149,7 +151,7 @@ int game_mode(){
 
     input[strlen(input)-1] = '\0';
 
-    if(strcpm(input, "1") == 0){
+    if(strcmp(input, "1") == 0){
         return MODE_1V1;
     } 
     return MODE_DEFAULT;
@@ -161,7 +163,7 @@ void connection_lost(void){
     fflush(stdout);
 }
 
-void bersagli(int id, char username){
+void bersagli(int id, char *username){
     // serve per aggiungere i nuovi nemici, si usa una lista a puntatori perchè a priori non so quanti bersagli ci sono
     nemici *nemico = malloc(sizeof(nemici));
 

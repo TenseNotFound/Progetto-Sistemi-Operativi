@@ -15,7 +15,7 @@ void addboat(int x, int y, char orientazione, int size);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);
 void server_connected(char *ip, int port, int id);
 int game_mode();
-void bersagli(int id, char username);
+void bersagli(int id, char *username);
 void turno(void);
 void ricezione_mossa(azioni *buff);
 void errore_invio_mossa(void); 
