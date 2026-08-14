@@ -29,7 +29,7 @@ typedef azioni mosse;
 typedef struct players player;
 
 volatile sig_atomic_t timeout = 1, lobby_aperta = 1, shutdown_flag = 0;
-int port, sem1 = 0, sem2 = 0, n = 0, fine = 0;           
+int port, sem1 = 0, sem2 = 0, n = 0;           
 /*
     sem1-> serve per i turni
     sem2-> serve per dare il via libera a tutti dopo che anche l'ultimo client connesso ha finito di disporre le navi
@@ -78,7 +78,7 @@ typedef struct{
     player  *head;
     int count;
     int next_id;
-    int game_started;
+    int fine;
     int active_threads; // serve per tenere traccia di quanti thread client sono attivi, così da poterli chiudere tutti in caso di poweroff
     pthread_mutex_t lock; // serve per proteggere questi valori, senza che lo dichiaro globale lo metto qui dentro
 } gstate;
@@ -87,7 +87,7 @@ static gstate stato = {
     NULL, 
     0,  // quanti giocatori sono connessi
     0, // quanti utenti sono già connessi
-    0, // 0 -> partita non iniziata, 1 -> partita iniziata
+    0, // inizializzazione flag per la fine
     0, // inizialmente nessun thread attivo
     PTHREAD_MUTEX_INITIALIZER
 };
@@ -177,8 +177,7 @@ int main(int argc, char **argv){
 
     if(sigaction(SIGALRM, &sa, NULL) == -1){
         perror("Errore nell'installare la sigaction, procedo con l'installazione della signal");
-        signal(SIGALRM, timeout_lobby);
-        if(errno == SIG_ERR){
+        if(signal(SIGALRM, timeout_lobby) == SIG_ERR){
             perror("Errore nell'installazione della signal");
             exit(EXIT_FAILURE);
         }
@@ -188,16 +187,14 @@ int main(int argc, char **argv){
     
     if (sigaction(SIGINT, &sa, NULL) == -1) {
         perror("Errore nell'installare la sigaction per SIGINT");
-        signal(SIGINT, chiusura);
-        if(errno == SIG_ERR){
+        if(signal(SIGINT, chiusura) == SIG_ERR){
             perror("Errore nell'installazione della signal");
             exit(EXIT_FAILURE);
         }
     }
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
         perror("Errore nell'installare la sigaction per SIGTERM");
-        signal(SIGTERM, chiusura);
-        if(errno == SIG_ERR){
+        if(signal(SIGTERM, chiusura) == SIG_ERR){
             perror("Errore nell'installazione della signal");
             exit(EXIT_FAILURE);
         }
@@ -461,11 +458,11 @@ void *client_thread(void *args){
 
     azioni gamemode;
     memset(&gamemode, 0, sizeof(gamemode));
-    if(recv_msg(fd, &gamemode) != 0 && gamemode.gamemode != MODE){
+    if(recv_msg(fd, &gamemode) != 0 || gamemode.type != MODE){
         /*
             IMPLEMENTARE UN HANDLE PER LA GAMEMODE
         */
-        printf("[!] Errore nella ricezione della gamemode dal client %s:%d", ip, port);
+        printf("[!] Errore nella ricezione della gamemode dal client %s:%d\n", ip, portc);
         goto exit;
     }
 
@@ -486,6 +483,7 @@ void *client_thread(void *args){
     ready.sem_op = 1;
 
     int ret;
+    bool fine_partita;
 
 post:
     if((ret = semop(sem2, &ready, 1)) == -1 && errno != EINTR){
@@ -506,8 +504,11 @@ gback:
         goto exit;
     } else if(ret == -1) goto gback;
 
+    pthread_mutex_lock(&stato.lock);
+    fine_partita = stato.fine;
+    pthread_mutex_unlock(&stato.lock);
 
-    if (fine) goto exit;
+    if(fine_partita) goto exit;
 
     pthread_mutex_lock(&stato.lock);
     int id = me->id;
@@ -629,7 +630,6 @@ gback:
         gameover.target_id = bersaglio->id;
         
         pthread_mutex_lock(&stato.lock); 
-        // comunico a TUTTI i player collegati l'esito delle mosse, qui solo quelle con eliminated
 
         broadcast(&gameover);
 
@@ -652,10 +652,14 @@ next_turn:
         }
     }
 
+    if(prossimo == -1 && !stato.fine){
+        stato.fine = 1;
+        fine_partita = true;
+    }
+
     pthread_mutex_unlock(&stato.lock);
     
-    if(prossimo == -1){
-        fine = 1;
+    if(fine_partita){
         azioni win; 
         memset(&win, 0, sizeof(win));
         win.type = WIN;
@@ -668,7 +672,7 @@ next_turn:
         pthread_mutex_unlock(&stato.lock);
         goto exit;
 
-    }
+    } else if (prossimo == -1) goto exit;
     sem.sem_op = 1;
     sem.sem_num = prossimo;
 
@@ -999,7 +1003,7 @@ int ricezione_navi (int fd, player *me){
 void broadcast(azioni *esito){
     // serve per le comunicazioni di esiti a tutti i player, da utilizzare sotto mutex di stato.lock
     for(player *p = stato.head; p != NULL; p = p->next){
-        if(send_msg(p->socket, &esito) == -1){
+        if(send_msg(p->socket, esito) == -1){
             printf("Impossibile inviare il messaggio di esito al giocatore %s:%d\n", p->username, p->id);
         }
     }
