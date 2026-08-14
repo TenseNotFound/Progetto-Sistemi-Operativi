@@ -89,7 +89,6 @@ int main(int argc, char **argv) {
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
 
-	char buffer[BUFFER_SIZE];
 
 	socketfd = connetti(ip_buf, port, &server_addr);
 	if(socketfd == -1){
@@ -278,7 +277,7 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
 		return -1;
 	}
 
-	if(connect(socketfd, (struct sockaddr_in *)server_addr, sizeof(struct sockaddr_in)) == -1){
+	if(connect(socketfd, (struct sockaddr *)server_addr, sizeof(struct sockaddr_in)) == -1){
 		perror("Errore nella connessione al server");
 		close(socketfd);
 		return -1;

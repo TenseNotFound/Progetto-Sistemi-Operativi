@@ -370,7 +370,7 @@ start:
         if((ret = semop(sem1, &startup, 1)) == -1 && errno != EINTR){
             perror("Errore nell'avviare i player");
             goto exit;
-        }
+        } else if (ret == -1) goto start;
 
     }
 
@@ -492,196 +492,186 @@ post:
     } else if(ret == -1) goto post;
 
     
-while(1){
-    struct sembuf sem;
-    sem.sem_flg = 0;
-    sem.sem_num = me->sem_id;
-    sem.sem_op = -1;
+    while(1){
+        struct sembuf sem;
+        sem.sem_flg = 0;
+        sem.sem_num = me->sem_id;
+        sem.sem_op = -1;
 
 gback:
-    if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){  
-        perror("Errore nel prendere il gettone");
-        goto exit;
-    } else if(ret == -1) goto gback;
+        if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){  
+            perror("Errore nel prendere il gettone");
+            goto exit;
+        } else if(ret == -1) goto gback;
 
-    pthread_mutex_lock(&stato.lock);
-    fine_partita = stato.fine;
-    pthread_mutex_unlock(&stato.lock);
+        pthread_mutex_lock(&stato.lock);
+        fine_partita = stato.fine;
+        pthread_mutex_unlock(&stato.lock);
 
-    if(fine_partita) goto exit;
+        if(fine_partita) goto exit;
 
-    pthread_mutex_lock(&stato.lock);
-    int id = me->id;
-    int alive = me->alive;
-    int semid = me->sem_id;
-    char username[USERNAME];
-    strncpy(username, me->username, USERNAME);
-    pthread_mutex_unlock(&stato.lock);
+        pthread_mutex_lock(&stato.lock);
+        int id = me->id;
+        int alive = me->alive;
+        int semid = me->sem_id;
+        char username[USERNAME];
+        strncpy(username, me->username, USERNAME);
+        pthread_mutex_unlock(&stato.lock);
 
-    if(!alive) goto exit;
+        if(!alive) goto exit;
 
-    pthread_mutex_lock(&stato.lock);
-    for(player *p  = stato.head; p != NULL; p = p->next){
-        if(p->id != id && p->alive){
-            azioni info;
-            memset(&info, 0 , sizeof(info));
-            info.type = INFO;
-            info.player_id = p->id;
-            strncpy(info.username, p->username, USERNAME-1);
-            if(send_msg(me->socket, &info) == -1){
-                printf("Errore nell'invio del pacchetto di informazioni agli altri player");
-                pthread_mutex_unlock(&stato.lock);
-                goto exit;
+        pthread_mutex_lock(&stato.lock);
+        for(player *p  = stato.head; p != NULL; p = p->next){
+            if(p->id != id && p->alive){
+                azioni info;
+                memset(&info, 0 , sizeof(info));
+                info.type = INFO;
+                info.player_id = p->id;
+                strncpy(info.username, p->username, USERNAME-1);
+                if(send_msg(me->socket, &info) == -1){
+                    printf("Errore nell'invio del pacchetto di informazioni agli altri player");
+                    pthread_mutex_unlock(&stato.lock);
+                    goto exit;
+                }
             }
         }
-    }
-    
-    pthread_mutex_unlock(&stato.lock);
-
-    azioni turno;
-    memset(&turno, 0, sizeof(turno));
-    turno.type = TURN;
-    turno.player_id = id;
-    if(send_msg(fd, &turno) == -1){
-        printf("Errore nel comunicare il turno a %s\n, rimuovo il player\n", username);
-        fflush(stdout);
-        pthread_mutex_lock(&stato.lock);
-        me->alive = 0;
-        pthread_mutex_unlock(&stato.lock);
-        goto exit;
-    }
-
-    azioni mossa;
-    if(recv_msg(fd, &mossa) == -1 || mossa.type != MOVE){
-        printf("è stata ricevuta una mossa non valida oppure è stata persa la connessione da %s:%d, rimuovo il player\n", username, id);
-        fflush(stdout);
-        pthread_mutex_lock(&stato.lock);
-        me->alive = 0;
-        pthread_mutex_unlock(&stato.lock);
-        goto next_turn; 
-    }
-
-    pthread_mutex_lock(&stato.lock);
-    player *bersaglio = trova_giocatore(mossa.target_id, false);
-    pthread_mutex_unlock(&stato.lock);
-    
-    azioni esito;
-    memset(&esito, 0, sizeof(esito));
-    esito.player_id = id;
-    esito.target_id = mossa.target_id;
-    esito.x = mossa.x;
-    esito.y = mossa.y;
-    bool eliminato = false;
-
-    if(bersaglio == NULL || !bersaglio->alive || mossa.x < 0 || mossa.y < 0 || mossa.x >= GRID_SIZE || mossa.y >= GRID_SIZE){
-        printf("Bersaglio specificato o coordinate ricevute non valide\n");
-        fflush(stdout);
-        esito.type = MISS;
-    } else {
-        pthread_mutex_lock(&stato.lock); // per fare i controlli in sicurezza
-        char cella = bersaglio->griglia[mossa.x][mossa.y];
-        bool colpito = (cella >= '0' && cella <= '4');
-
-        if(colpito){
-            bersaglio->griglia[mossa.x][mossa.y] = 'X';
-            esito.type = HIT;
-            bool affondata = true;
-            for(int i = 0; i<GRID_SIZE; i++){
-                for(int j = 0; j<GRID_SIZE; j++){
-
-                    if(bersaglio->griglia[i][j] == cella){ // se trovo un altro elemento di quella nave, vuol dire che ancora non è affondata
-                        affondata = false;
-                        break;
-                    }
-                }
-                if(!affondata) break; // nel caso abbia già trovato una nave esco 
-            }
-
-            if(affondata){
-                bersaglio->navi_rimaste--;
-                printf("[*] Il giocatore %s:%d ha affondato la nave di %s:%d!\n", username, id, bersaglio->username, bersaglio->id);
-
-                if(bersaglio->navi_rimaste <= 0){
-                    bersaglio->alive = 0;
-                    eliminato = true;
-                }
-
-            }
-            
-        } else {
-            esito.type = MISS;
-            if(bersaglio->griglia[mossa.x][mossa.y] == '~') {
-                bersaglio->griglia[mossa.x][mossa.y] = 'O'; 
-            }
-        }
-        pthread_mutex_unlock(&stato.lock);
-    }
-
-    pthread_mutex_lock(&stato.lock); 
-    
-    broadcast(&esito);
-
-    pthread_mutex_unlock(&stato.lock);
-
-    if(eliminato){
-        azioni gameover;
-        memset(&gameover, 0, sizeof(gameover));
-        gameover.type = ELIMINATED;
-        gameover.target_id = bersaglio->id;
         
-        pthread_mutex_lock(&stato.lock); 
-
-        broadcast(&gameover);
-
         pthread_mutex_unlock(&stato.lock);
-    }
 
-
-    pthread_mutex_lock(&stato.lock);
-
-    // poichè a priori non so se il prossimo giocatore è stato eliminato, devo trovare il prossimo ancora vivo e poi passare l'id alla sembuf
-next_turn:
-    int prossimo = -1; 
-    int test = semid;
-    for(int i = 0; i<n; i++){
-        test = (test +1) %n;
-        player *p = trova_giocatore(test, true); // true specifica se ricerca per numero di semaforo, false solo con id
-        if(p != NULL && p->alive){  
-            prossimo = test;
-            break;
+        azioni turno;
+        memset(&turno, 0, sizeof(turno));
+        turno.type = TURN;
+        turno.player_id = id;
+        if(send_msg(fd, &turno) == -1){
+            printf("Errore nel comunicare il turno a %s\n, rimuovo il player\n", username);
+            fflush(stdout);
+            pthread_mutex_lock(&stato.lock);
+            me->alive = 0;
+            pthread_mutex_unlock(&stato.lock);
+            goto exit;
         }
-    }
 
-    if(prossimo == -1 && !stato.fine){
-        stato.fine = 1;
-        fine_partita = true;
-    }
+        azioni mossa;
+        if(recv_msg(fd, &mossa) == -1 || mossa.type != MOVE){
+            printf("è stata ricevuta una mossa non valida oppure è stata persa la connessione da %s:%d, rimuovo il player\n", username, id);
+            fflush(stdout);
+            pthread_mutex_lock(&stato.lock);
+            me->alive = 0;
+            pthread_mutex_unlock(&stato.lock);
+            goto next_turn; 
+        }
 
-    pthread_mutex_unlock(&stato.lock);
-    
-    if(fine_partita){
-        azioni win; 
-        memset(&win, 0, sizeof(win));
-        win.type = WIN;
-        win.player_id = id;
+        azioni esito;
+        memset(&esito, 0, sizeof(esito));
+        esito.player_id = id;
+        esito.target_id = mossa.target_id;
+        esito.x = mossa.x;
+        esito.y = mossa.y;
+        bool eliminato = false;
 
         pthread_mutex_lock(&stato.lock);
+        player *bersaglio = trova_giocatore(mossa.target_id, false);
+        
+        
+        if(bersaglio == NULL || !bersaglio->alive || mossa.x < 0 || mossa.y < 0 || mossa.x >= GRID_SIZE || mossa.y >= GRID_SIZE){
+            printf("Bersaglio specificato o coordinate ricevute non valide\n");
+            fflush(stdout);
+            esito.type = MISS;
+        } else {
+            char cella = bersaglio->griglia[mossa.x][mossa.y];
+            bool colpito = (cella >= '0' && cella <= '4');
 
-        broadcast(&win);
+            if(colpito){
+                bersaglio->griglia[mossa.x][mossa.y] = 'X';
+                esito.type = HIT;
+                bool affondata = true;
+                for(int i = 0; i<GRID_SIZE; i++){
+                    for(int j = 0; j<GRID_SIZE; j++){
+
+                        if(bersaglio->griglia[i][j] == cella){ // se trovo un altro elemento di quella nave, vuol dire che ancora non è affondata
+                            affondata = false;
+                            break;
+                        }
+                    }
+                    if(!affondata) break; // nel caso abbia già trovato una nave esco 
+                }
+
+                if(affondata){
+                    bersaglio->navi_rimaste--;
+                    printf("[*] Il giocatore %s:%d ha affondato la nave di %s:%d!\n", username, id, bersaglio->username, bersaglio->id);
+
+                    if(bersaglio->navi_rimaste <= 0){
+                        bersaglio->alive = 0;
+                        eliminato = true;
+                    }
+
+                }
+                
+            } else {
+                esito.type = MISS;
+                if(bersaglio->griglia[mossa.x][mossa.y] == '~') {
+                    bersaglio->griglia[mossa.x][mossa.y] = 'O'; 
+                }
+            }
+        }
+        
+        broadcast(&esito);
 
         pthread_mutex_unlock(&stato.lock);
-        goto exit;
 
-    } else if (prossimo == -1) goto exit;
-    sem.sem_op = 1;
-    sem.sem_num = prossimo;
+        if(eliminato){
+            azioni gameover;
+            memset(&gameover, 0, sizeof(gameover));
+            gameover.type = ELIMINATED;
+            gameover.target_id = bersaglio->id;
+            
+            pthread_mutex_lock(&stato.lock);
+            broadcast(&gameover);
+            pthread_mutex_unlock(&stato.lock);
+        }
+
+        // poichè a priori non so se il prossimo giocatore è stato eliminato, devo trovare il prossimo ancora vivo e poi passare l'id alla sembuf
+next_turn:
+        pthread_mutex_lock(&stato.lock);
+        int prossimo = -1; 
+        int test = semid;
+        for(int i = 0; i<n; i++){
+            test = (test +1) %n;
+            player *p = trova_giocatore(test, true); // true specifica se ricerca per numero di semaforo, false solo con id
+            if(p != NULL && p->alive){  
+                prossimo = test;
+                break;
+            }
+        }
+
+        if(prossimo == -1 && !stato.fine){
+            stato.fine = 1;
+            fine_partita = true;
+        }
+
+        pthread_mutex_unlock(&stato.lock);
+        
+        if(fine_partita){
+            azioni win; 
+            memset(&win, 0, sizeof(win));
+            win.type = WIN;
+            win.player_id = id;
+
+            pthread_mutex_lock(&stato.lock);
+            broadcast(&win);
+            pthread_mutex_unlock(&stato.lock);
+            goto exit;
+
+        } else if (prossimo == -1) goto exit;
+        sem.sem_op = 1;
+        sem.sem_num = prossimo;
 
 pass: 
-    if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){
-        perror("Errore nel rilasciare il gettone del semaforo al prossimo player");
-        goto exit;
-    } else if(ret == -1) goto pass;
-}
+        if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){
+            perror("Errore nel rilasciare il gettone del semaforo al prossimo player");
+            goto exit;
+        } else if(ret == -1) goto pass;
+    }
     
 
 exit:
