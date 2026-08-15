@@ -152,7 +152,7 @@ int main(int argc, char **argv){
         exit(EXIT_FAILURE);
     }
 
-    // dimensione del backlog -> dimensione della coda di attesa, definita nel protocollo
+    // dimensione del backlog -> dimensione della coda di attesa (pending connection non ancora accettate), definita nel protocollo
     if (listen(llisten, BACKLOG) < 0) {
         perror("listen() fallita");
         close(llisten);
@@ -221,6 +221,13 @@ int main(int argc, char **argv){
 
     semctl(sem2, 0, SETVAL, 0); // inizialmente ho 0 gettoni, poi mi faccio fare le post su questo semaforo e quando torna a 0 sblocco tutto
 
+    sem1 = semget(IPC_PRIVATE, MAX_PLAYER, IPC_CREAT|0664);
+    if(sem1 == -1){
+        perror("Errore nella creazione del semaforo per i turni dei client connessi");
+        goto exit;
+    }
+
+    int current_player = 0; // variabile locale al while per il controllo dei client collegati, senza che uso il mutex
     printf("Lobby aperta per 30s\n");
     alarm(30);
  
@@ -234,6 +241,13 @@ int main(int argc, char **argv){
             if(errno == EINTR) continue;
             perror("Errore nell'accept() in ascolto del client");
             continue;
+        }
+
+        if(current_player >= MAX_PLAYER){
+            // magari aggiungi un messaggio di notifica al client per la chiusura lobby 
+            close(client);
+            alarm(0);
+            break;
         }
 
         client_arg *cargs = malloc(sizeof(client_arg));
@@ -263,6 +277,7 @@ int main(int argc, char **argv){
             continue;
         }
         pthread_detach(tid);
+        current_player++;
 
     }
 
@@ -332,13 +347,6 @@ int main(int argc, char **argv){
 
         pthread_mutex_unlock(&stato.lock);
 
-        sem1 = semget(IPC_PRIVATE, n, IPC_CREAT|0664);
-
-        if(sem1 == -1){
-            perror("Errore nella creazione del semaforo per i turni dei client connessi");
-            goto exit;
-        }
-
         for(int i = 0; i<n; i++){
             semctl(sem1, i, SETVAL, 0);
         }
@@ -396,6 +404,16 @@ exit:
     if (sem2 > 0) semctl(sem2, 0, IPC_RMID);
     
     if (llisten > 0) close(llisten);
+
+    // devo attendere che tutti i thread terminino
+    for(int max = 0; max< TIMEUOUT_SHOUTDOWN; max++){
+        pthread_mutex_lock(&stato.lock);
+        if(stato.active_threads == 0){
+            pthread_mutex_unlock(&stato.lock);
+            break;
+        } else pthread_mutex_unlock(&stato.lock);
+        sleep(1);
+    }
 
     pthread_mutex_lock(&stato.lock);
     player *curr = stato.head, *temp;
@@ -471,6 +489,7 @@ void *client_thread(void *args){
 
     if(ricezione_navi(fd, me) != 0){
         printf("Formazione ricevuta non valida");
+        //manda un messaggio di notifica al client
         goto exit;
     }
 

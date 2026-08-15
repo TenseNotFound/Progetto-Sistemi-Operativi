@@ -4,6 +4,9 @@
 #define SHIP_NUMBER 5
 #define GRID_SIZE 10
 #define BACKLOG 16
+#define MAX_PLAYER 32 // scelta obligata via dimensioni fisse dei semafori, ho bisogno a priori di un semaforo con dim ≥ del numero n di client connessi per 
+                      // poter accettare correttamente tutti i nuovi player
+#define TIMEUOUT_SHOUTDOWN 10 // (secondi)
 #define DISCOVERY_PORT 9999
 #define DISCOVER "DISCOVER"
 #define TIMEOUT 5
