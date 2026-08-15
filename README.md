@@ -18,3 +18,5 @@ discrezione dello studente.
 
 Il progetto si divide quindi in due versioni, una per lo standard Posix ed un altra per lo standard WINAPI.
 Per comodità di programmazione si è optato per la suddivisione dei due scenari: è stata creato un branch per Posix ed uno per WINAPI.
+
+Il server.c può essere compilato sia su un dispositivo in locale, oppure se si volesse usare solo il client, ci si deve collegare alla VPN (ZeroTierOne) che ospita un server fisico che esegue l'eseguibile (Proxmox, container LCX).
