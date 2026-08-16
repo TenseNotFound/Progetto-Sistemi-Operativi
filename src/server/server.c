@@ -516,6 +516,7 @@ post:
         sem.sem_flg = 0;
         sem.sem_num = me->sem_id;
         sem.sem_op = -1;
+        bool colpito = false;
 
 gback:
         if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){  
@@ -603,6 +604,7 @@ gback:
             if(colpito){
                 bersaglio->griglia[mossa.x][mossa.y] = 'X';
                 esito.type = HIT;
+                colpito = true;
                 bool affondata = true;
                 for(int i = 0; i<GRID_SIZE; i++){
                     for(int j = 0; j<GRID_SIZE; j++){
@@ -656,17 +658,18 @@ next_turn:
         int test = semid;
         for(int i = 0; i<n; i++){
             test = (test +1) %n;
+            if (test == semid) continue;
             player *p = trova_giocatore(test, true); // true specifica se ricerca per numero di semaforo, false solo con id
-            if(p != NULL && p->alive){  
+            if(p != NULL && p->alive){ 
                 prossimo = test;
                 break;
             }
         }
 
-        if(prossimo == -1 && !stato.fine){
-            stato.fine = 1;
-            fine_partita = true;
-        }
+        bool solo = (prossimo == -1); // per vedere se ci sono altri avversari
+        if(solo && !stato.fine){
+            stato.fine = fine_partita = 1; //sono solo chiudo la partira
+        } else if(colpito && !solo) prossimo = semid;
 
         pthread_mutex_unlock(&stato.lock);
         
