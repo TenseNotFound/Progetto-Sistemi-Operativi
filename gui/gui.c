@@ -301,3 +301,8 @@ void fflush_stdin(void){
 	int c;
 	while((c = getchar()) != '\n' && c != EOF);
 }
+
+void welcomeback(char *buff){
+    printf("[*] Bentornato %s! \n", buff);
+    fflush(stdout);
+}
