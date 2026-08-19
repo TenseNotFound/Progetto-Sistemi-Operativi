@@ -118,7 +118,7 @@ int main(int argc, char **argv){
     ret = setsockopt(llisten, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if(ret == -1){
         perror("Errore nella setsockopt");
-        exit(EXIT_FAILURE);
+        goto exit;
     }
 
     struct sockaddr_in server_addr;
@@ -139,22 +139,19 @@ int main(int argc, char **argv){
             port = 1024 + (rand() % (65535 - 1024));   /* range non privilegiato */
         } else {
             perror("bind() fallita");
-            close(llisten);
-            exit(-1);
+            goto exit;
         }
     }
  
     if (!bound) {
         perror("Impossibile trovare una porta libera dopo il numero massimo di tentativi concesso");
-        close(llisten);
-        exit(EXIT_FAILURE);
+        goto exit;
     }
 
     // dimensione del backlog -> dimensione della coda di attesa (pending connection non ancora accettate), definita nel protocollo
     if (listen(llisten, BACKLOG) < 0) {
         perror("listen() fallita");
-        close(llisten);
-        exit(EXIT_FAILURE);
+        goto exit;
     }
 
     printf("\n==================================================\n         SERVER AVVIATO CON SUCCESSO         \n==================================================\n");
@@ -166,35 +163,47 @@ int main(int argc, char **argv){
     
     struct sigaction sa;
     sa.sa_flags = 0;
-    sa.sa_handler = timeout_lobby;
 
     if (sigemptyset(&sa.sa_mask) == -1){
         perror("Errore nello svuotare la maschera delle segnalazioni");
-        exit(EXIT_FAILURE);
+        goto exit;
     }
 
+    sa.sa_handler = SIG_IGN;
+
+    if(sigaction(SIGPIPE, &sa, NULL) == -1){
+        perror("Errore nell'installare la sigaction per SIGPIPE, procedo con l'installazione della signal");
+        if(signal(SIGPIPE, SIG_IGN) == SIG_ERR){
+            perror("Errore nell'installazione della signal");
+            goto exit;
+        }
+    }
+
+    sa.sa_handler = timeout_lobby;
+
     if(sigaction(SIGALRM, &sa, NULL) == -1){
-        perror("Errore nell'installare la sigaction, procedo con l'installazione della signal");
+        perror("Errore nell'installare la sigaction per SIGALARM, procedo con l'installazione della signal");
         if(signal(SIGALRM, timeout_lobby) == SIG_ERR){
             perror("Errore nell'installazione della signal");
-            exit(EXIT_FAILURE);
+            goto exit;
         }
     }
     
     sa.sa_handler = chiusura;
     
     if (sigaction(SIGINT, &sa, NULL) == -1) {
-        perror("Errore nell'installare la sigaction per SIGINT");
+        perror("Errore nell'installare la sigaction per SIGINT, procedo con l'installazione della signal");
         if(signal(SIGINT, chiusura) == SIG_ERR){
             perror("Errore nell'installazione della signal");
-            exit(EXIT_FAILURE);
+            goto exit;
         }
     }
+
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
-        perror("Errore nell'installare la sigaction per SIGTERM");
+        perror("Errore nell'installare la sigaction per SIGTERM, procedo con l'installazione della signal");
         if(signal(SIGTERM, chiusura) == SIG_ERR){
             perror("Errore nell'installazione della signal");
-            exit(EXIT_FAILURE);
+            goto exit;
         }
     }
 
@@ -202,19 +211,17 @@ int main(int argc, char **argv){
     
     if(pthread_create(&udp_thread, NULL, udp_discovery_port, &port) != 0){
         perror("Errore nella creazione del thread per la discovery UDP");
-        close(llisten);
-        exit(EXIT_FAILURE);
+        goto exit;
     } else {
         pthread_detach(udp_thread);
         printf("Thread UDP discovery creato con successo\n");
         fflush(stdout);
-
     }
 
     sem2 = semget(IPC_PRIVATE, 1, IPC_CREAT|0664);
     if(sem2 == -1){
         perror("Errore nella creazione del semaforo per il controllo che tutti i player hanno terminato l'invio della formazione");
-        exit(EXIT_FAILURE);
+        goto exit;
     }
 
     semctl(sem2, 0, SETVAL, 0); // inizialmente ho 0 gettoni, poi mi faccio fare le post su questo semaforo e quando torna a 0 sblocco tutto
