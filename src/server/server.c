@@ -1001,7 +1001,7 @@ int ricezione_navi (int fd, player *me){
             printf("Indice della nave errato");
             return -1;
         }
-        if(!validazione_formazione(me->griglia, x, y, orientazione, ship_tipe[i].size, i)){
+        if(!validazione_formazione(me->griglia, x, y, orientazione, ship_type[i].size, i)){
             printf("Inserimento della nave non valido");
             return -1;
         }

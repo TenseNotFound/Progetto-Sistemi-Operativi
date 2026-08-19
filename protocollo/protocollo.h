@@ -34,7 +34,7 @@ typedef struct azioni{ // mi definisce la mossa
 } azioni;
 
 typedef struct posizionamento{ // mi definisce la nave
-    int index; //indice in ship_tipe
+    int index; //indice in ship_type
     int x,y; //coordinate nave 
     char orientation; //orientamento della nave (N,S,E,O)
 }posizionamento;
@@ -45,7 +45,7 @@ typedef struct navi{
     posizionamento posizioni[5]; // massimo 5 navi, quindi massimo 5 posizioni
 } nave;
 
-extern const nave ship_tipe[SHIP_NUMBER]; // così non creo 3 blocchi di memoria identica 
+extern const nave ship_type[SHIP_NUMBER]; // così non creo 3 blocchi di memoria identica 
                                           // serve const così non ci sono problemi di scrittura quindi sincronizzazione
                                           // è read-only 
 

@@ -416,7 +416,7 @@ int piazzamento_navi (int socket) {
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
 		draw_grids();
 		do {
-			printf("Inserisci le coordinate della nave %s (dimensione %d) e l'orientamento (N,S,E,O):\n", ship_tipe[i].name, ship_tipe[i].size);
+			printf("Inserisci le coordinate della nave %s (dimensione %d) e l'orientamento (N,S,E,O):\n", ship_type[i].name, ship_type[i].size);
 			while(scanf("%d %d %c", &x, &y, &orientazione)!= 3 || (orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O')){ 
 				printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"); 
 				fflush(stdout);
@@ -424,7 +424,7 @@ int piazzamento_navi (int socket) {
 			}
 
 			fflush_stdin();
-			valid = validazione(occupata, x - 1, y - 1, orientazione, ship_tipe[i].size);
+			valid = validazione(occupata, x - 1, y - 1, orientazione, ship_type[i].size);
 			if (!valid) {
 				printf("Posizionamento non valido: la nave esce dalla griglia o si sovrappone a un'altra nave. Riprova.\n");
 				fflush(stdout);
@@ -436,10 +436,10 @@ int piazzamento_navi (int socket) {
 		posizioni_navi[i].y = y-1;
 		posizioni_navi[i].orientation = orientazione;
 
-		addboat(x - 1 , y - 1, orientazione, ship_tipe[i].size);
+		addboat(x - 1 , y - 1, orientazione, ship_type[i].size);
 	
 		clean_screen();
-		printf("Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_tipe[i].name, x, y, orientazione);
+		printf("Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_type[i].name, x, y, orientazione);
 		
 		fflush(stdout);
 	}
