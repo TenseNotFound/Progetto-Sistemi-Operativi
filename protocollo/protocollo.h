@@ -11,7 +11,6 @@
 #define AFK_TIMEOUT 180 // (secondi) inattività AFK
 #define DISCOVERY_PORT 9999
 #define DISCOVER "DISCOVER"
-#define TIMEOUT 5
 #define BUFFER_SIZE 256
 #define TENTATIVI 20 // per la ricerca della porta
 #define USERNAME 17
