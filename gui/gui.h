@@ -4,6 +4,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#define BOARD_BUFFER_SIZE 4096
+#define ROSSO    "\x1b[31m"
+#define VERDE    "\x1b[32m"
+#define GIALLO   "\x1b[33m"
+#define BLU      "\x1b[34m"
+#define CIANO    "\x1b[36m"
+#define BIANCO   "\x1b[37m"
+#define RESET    "\x1b[0m" // colore di default del terminale
+
+#define ACQUA    CIANO
+#define NAVE     BIANCO
+#define COLPITO  ROSSO
+#define MANCATO  GIALLO
 
 extern char grid[GRID_SIZE][GRID_SIZE];
 extern char target_grid[GRID_SIZE][GRID_SIZE];

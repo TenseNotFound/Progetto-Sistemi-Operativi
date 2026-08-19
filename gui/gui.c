@@ -22,29 +22,29 @@ void gui_init(bool flag){
     clean_screen();
 
     if(flag){
-        printf("[!] Modalità connessione automatica attiva. \n[*] Startup in corso...\n");
+        printf(GIALLO "[!] Modalità connessione automatica attiva. \n[*] Startup in corso...\n" RESET);
     }
     
-    printf("====================================================================\n");
+    printf(BLU "====================================================================\n");
     printf("                   BATTAGLIA NAVALE - CLIENT v1.0                   \n");
-    printf("====================================================================\n");
+    printf("====================================================================\n"RESET);
     printf(" Progetto Sistemi Operativi - A.A. 2025/2026                        \n");
     printf(" Realizzato da:                                                     \n");
-    printf("  [*] Lorenzo Tarantino (TenseNotFound)                             \n");
-    printf("  [*] Leonardo (lrcicalini)                                         \n");
+    printf(VERDE"  [*] Lorenzo Tarantino (TenseNotFound)                             \n");
+    printf("  [*] Leonardo (lrcicalini)                                         \n"RESET);
     printf(" Link alla repository:                                              \n");
-    printf("  [*] https://github.com/TenseNotFound/Progetto-Sistemi-Operativi   \n");
-    printf("====================================================================\n\n");
+    printf(BLU"  [*] https://github.com/TenseNotFound/Progetto-Sistemi-Operativi   \n");
+    printf("====================================================================\n\n"RESET);
     
     printf("Benvenuto nel gioco battaglia navale!\n");
-    printf("[*] In attesa della connessione con il server...\n\n");
+    printf(GIALLO"[*] In attesa della connessione con il server...\n\n"RESET);
     
     fflush(stdout);
 }
 
 void server_connected(char *ip, int port, int id){
-    printf("[*] Connessione stabilita con il server %s:%d\n", ip, port);
-    printf("[*] Il tuo ID è: %d\n", id);
+    printf(VERDE"[*] Connessione stabilita con il server %s:%d\n" RESET, ip, port);
+    printf("[*] Il tuo ID è: " VERDE "%d\n" RESET, id);
     fflush(stdout);
 }
 
@@ -63,32 +63,55 @@ void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]){
 }
 
 void draw_board(char griglia[GRID_SIZE][GRID_SIZE]) {
-    printf("    "); 
-    for(int i = 0; i < GRID_SIZE; i++){
-        if (i < 9) {
-            printf("%d ", i + 1); 
-        } else {
-            printf("%d", i + 1);
-        }
-    }
-    printf("\n");
 
-    for(int i = 0; i < GRID_SIZE; i++){
-        printf(" %c ", 'A' + i);
-        for(int j = 0; j < GRID_SIZE; j++){
-            printf("|%c", griglia[i][j]);
-        }
-        printf("|\n"); 
+    char buffer[BOARD_BUFFER_SIZE];
+    size_t offset = 0;
+    int scritto = 0;
+    char temp[16];
+
+    int col_width = snprintf(temp, sizeof(temp), "%d", GRID_SIZE);
+    scritto = snprintf(buffer + offset, sizeof(buffer) - offset, "    ");
+    offset += (scritto > 0) ? (size_t) scritto : 0;
+
+    for (int i = 0; i<GRID_SIZE; i++){
+        scritto = snprintf(buffer + offset, sizeof(buffer) - offset, "%-*d", col_width, i+1);
+        offset += (scritto > 0) ? (size_t) scritto : 0;
     }
-    printf("\n");
+
+    scritto = snprintf(buffer + offset, sizeof(buffer)- offset, "\n"); // mando a capo dopo la riga dell'intestazione
+    offset += (scritto > 0) ? (size_t) scritto : 0;
+
+    for(int i = 0; i<GRID_SIZE; i++){
+
+        scritto = snprintf(buffer + offset, sizeof(buffer) - offset, " %c ", 'A' + i);
+        offset += (scritto > 0) ? (size_t) scritto : 0;
+        for(int j = 0; j<GRID_SIZE; j++){
+            scritto = snprintf(buffer+offset, sizeof(buffer) - offset, "|%s%c%s",
+                                griglia[i][j] == 'N' ? NAVE :
+                                griglia[i][j] == 'X' ? COLPITO :
+                                griglia[i][j] == 'O' ? MANCATO :
+                                ACQUA,
+                                griglia[i][j],
+                                RESET);
+            offset += (scritto > 0) ? (size_t) scritto : 0;
+        }
+
+        scritto = snprintf(buffer + offset, sizeof(buffer) - offset, "|\n");
+        offset += (scritto > 0) ? (size_t) scritto : 0;
+    }
+
+    scritto = snprintf(buffer + offset, sizeof(buffer) - offset, "\n");
+    offset += (scritto > 0) ? (size_t) scritto : 0;
+
+    fputs(buffer, stdout);
     fflush(stdout);
 }
 
 void draw_grids(){
-    printf("\n--- LA TUA FLOTTA ---\n");
+    printf(VERDE"\n--- LA TUA FLOTTA ---\n"RESET);
     draw_board(grid); 
     
-    printf("\n--- RADAR NEMICO ---\n");
+    printf(ROSSO"\n--- RADAR NEMICO ---\n"RESET);
     draw_board(target_grid);
 }
 
@@ -131,9 +154,9 @@ int game_mode(){
 
     char input[BUFFER_SIZE];
 
-    printf("\n [*] Scegli la modalità di gioco! \n");
-    printf("    [1] 1v1 \n");
-    printf("    [2] Default [Premi INVIO o qualsiasi altro tasto]\n");
+    printf(BLU "\n [*] Scegli la modalità di gioco! \n"RESET);
+    printf(VERDE"    [1] 1v1 \n"RESET);
+    printf(GIALLO"    [2] Default [Premi INVIO o qualsiasi altro tasto]\n"RESET);
     fflush(stdout);
 
     if(fgets(input, sizeof(input), stdin) == NULL){
@@ -150,7 +173,7 @@ int game_mode(){
 
 void connection_lost(void){
 
-    printf("\n[!] Connessione al server persa\n");
+    printf(ROSSO"\n[!] Connessione al server persa\n"RESET);
     fflush(stdout);
 }
 
@@ -172,19 +195,19 @@ void bersagli(int id, char *username){
 
 
 void turno() {
-    printf("\n==================================================\n");
+    printf(VERDE"\n==================================================\n");
     printf(" [*] È IL TUO TURNO \n");
-    printf("==================================================\n");
+    printf("==================================================\n"RESET);
 
-    printf("\n--- BERSAGLI DISPONIBILI ---\n");
+    printf(ROSSO"\n--- BERSAGLI DISPONIBILI ---\n"RESET);
     nemici *curr = target;
     int i = 0;
     while(curr != NULL) {
-        printf(" [%d] [ID: %d] %s\n",i+1 ,curr->id, curr->nome);
+        printf(BLU " [%d] [ID: %d] %s\n"RESET,i+1 ,curr->id, curr->nome);
         curr = curr->next;
         i++;
     }
-    printf("----------------------------\n");
+    printf(ROSSO "----------------------------\n"RESET);
     fflush(stdout);
 
     // stampo i nomi che sono temporanei, quindi poi libero subito
@@ -225,7 +248,7 @@ void ricezione_mossa(azioni *mossa) {
         if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
             // verifica se le coordinate sono nei limiti
             if (target_grid[x][y] == 'X' || target_grid[x][y] == 'O') {
-                printf("[!] Hai già sparato in queste coordinate. Scegli un altro bersaglio!\n");
+                printf(GIALLO"[!] Hai già sparato in queste coordinate. Scegli un altro bersaglio!\n"RESET);
             } else {
                 mossa->target_id = bersaglio;
                 mossa->x = x;
@@ -233,65 +256,65 @@ void ricezione_mossa(azioni *mossa) {
                 mossa_valida = true;
             }
         } else {
-            printf("[!] Coordinate non valide. Devi inserire Lettera (A-J) e Numero (1-10).\n");
+            printf(ROSSO"[!] Coordinate non valide. Devi inserire Lettera (A-J) e Numero (1-10).\n"RESET);
         }
     }
 }
 
 void errore_invio_mossa(void) { 
-    printf("\n[!] Errore: Impossibile inviare la mossa al server.\n");
+    printf(ROSSO"\n[!] Errore: Impossibile inviare la mossa al server.\n"RESET);
     fflush(stdout);
 }
 
 void non_mio_turno(int id) {
-    printf("\n[*] È il turno del giocatore %d. In attesa...\n", id);
+    printf(GIALLO"\n[*] È il turno del giocatore %d. In attesa...\n"RESET, id);
     fflush(stdout);
 }
 
 void colpito() {
-    printf("\n[+] BERSAGLIO COLPITO!\n");
+    printf(VERDE"\n[+] BERSAGLIO COLPITO!\n"RESET);
     fflush(stdout);
 }
 
 void miss() {
-    printf("\n[-] Mancato!\n");
+    printf(GIALLO"\n[-] Mancato!\n"RESET);
     fflush(stdout);
 }
 
 void spettatore(azioni *pck) {
     char esito_str[20];
-    if (pck->type == HIT) strcpy(esito_str, "COLPITO");
-    else strcpy(esito_str, "MANCATO");
+    if (pck->type == HIT) strcpy(esito_str, VERDE"COLPITO"RESET);
+    else strcpy(esito_str, GIALLO"MANCATO"RESET);
     
-    printf("\n[*] Il giocatore %d ha sparato al giocatore %d in %c%d: %s!\n", 
+    printf(BLU"\n[*] Il giocatore %d ha sparato al giocatore %d in %c%d: %s!\n"RESET, 
             pck->player_id, pck->target_id, pck->x + 'A', pck->y + 1, esito_str);
     fflush(stdout);
 }
 
 void s_eliminato() {
-    printf("\n=====================================================\n");
+    printf(ROSSO"\n=====================================================\n");
     printf(" [!] SEI STATO ELIMINATO! LA TUA FLOTTA È AFFONDATA [!]\n");
-    printf("=======================================================\n");
-    printf("[*] Rimani in attesa per guardare il resto della partita.\n");
+    printf("=======================================================\n"RESET);
+    printf(GIALLO"[*] Rimani in attesa per guardare il resto della partita.\n"RESET);
     fflush(stdout);
 }
 
 void eliminato(int id) {
-    printf("\n [!] IL GIOCATORE %d È STATO ELIMINATO!\n", id);
+    printf(ROSSO"\n [!] IL GIOCATORE %d È STATO ELIMINATO!\n"RESET, id);
     fflush(stdout);
 }
 
 void s_vittoria() {
-    printf("\n==================================================\n");
+    printf(VERDE"\n==================================================\n");
     printf("                [*] VITTORIA! [*]                   \n");
-    printf("===================================================\n");
+    printf("===================================================\n"RESET);
     fflush(stdout);
 }
 
 void vittoria(int id) {
-    printf("\n==================================================\n");
+    printf(VERDE"\n==================================================\n");
     printf(" [*] LA PARTITA È CONCLUSA! HA VINTO IL GIOCATORE %d [*] \n", id);
-    printf("===================================================\n");
+    printf("===================================================\n"RESET);
     fflush(stdout);
 }
 
@@ -301,6 +324,6 @@ void fflush_stdin(void){
 }
 
 void welcomeback(char *buff){
-    printf("[*] Bentornato %s! \n", buff);
+    printf(VERDE"[*] Bentornato %s! \n"RESET, buff);
     fflush(stdout);
 }
