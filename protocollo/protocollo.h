@@ -43,7 +43,8 @@ typedef struct posizionamento{ // mi definisce la nave
 typedef struct navi{
     const char *name;
     uint8_t size; // così un solo byte, con numeri da 0-255 rispetto a 4 byte
-    posizionamento posizioni[5]; // massimo 5 navi, quindi massimo 5 posizioni
+    posizionamento posizioni[5]; // massimo 5 navi, quindi massimo 5 posizioni 
+                                 // possibile rimozione???
 } nave;
 
 extern const nave ship_type[SHIP_NUMBER]; // così non creo 3 blocchi di memoria identica 
