@@ -233,8 +233,8 @@ int main(int argc, char **argv){
     }
 
     int current_player = 0; // variabile locale al while per il controllo dei client collegati, senza che uso il mutex
-    printf("Lobby aperta per 30s\n");
-    alarm(30);
+    printf("Lobby aperta per %ds\n", TIMEOUT_LOBBY);
+    alarm(TIMEOUT_LOBBY);
  
     //lobby con timeout
     while(timeout && !shutdown_flag){

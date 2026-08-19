@@ -9,6 +9,7 @@
                       // poter accettare correttamente tutti i nuovi player
 #define TIMEUOUT_SHOUTDOWN 10 // (secondi)
 #define AFK_TIMEOUT 180 // (secondi) inattività AFK
+#define TIMEOUT_LOBBY 30
 #define DISCOVERY_PORT 9999
 #define DISCOVER "DISCOVER"
 #define BUFFER_SIZE 256
