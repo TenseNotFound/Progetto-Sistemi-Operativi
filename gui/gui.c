@@ -9,8 +9,6 @@ char grid[GRID_SIZE][GRID_SIZE];
 char target_grid[GRID_SIZE][GRID_SIZE];
 
 
-// spostare poi in protocollo.c
-
 typedef struct bersagli{
     int id;
     char nome[USERNAME];
