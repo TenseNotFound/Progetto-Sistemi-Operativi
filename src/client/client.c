@@ -284,6 +284,29 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
 }
 
 void getUsername(char *buf, size_t len){
+
+	int fd = open("_user", O_RDONLY);
+    if(fd == -1){
+        perror("Errore nell'apertura del file di gestione degli utenti");
+        
+    } else {
+		buf[0] = '\0';
+		ssize_t letti = readn(fd, buf, len-1);
+		if(letti > 0){
+			buf[letti] = '\0';
+			if (buf[letti - 1] == '\n') {
+        		buf[letti - 1] = '\0';
+    		}
+		}
+
+		if(strlen(buf)>0) {
+			welcomeback(buf);
+			close(fd);
+			return;
+		}
+		close(fd);
+	}
+
 	char temp[BUFFER_SIZE];
 	while(1) {
         printf("\n[*] Inserisci il tuo username: ");
@@ -293,8 +316,18 @@ void getUsername(char *buf, size_t len){
         fflush_stdin();
         
         if (strlen(temp) < len) {
-            strcpy(buf, temp); 
-            break;
+			int fd = open("_user", O_CREAT|O_WRONLY|O_TRUNC, 0664);
+			if(fd == -1){
+				perror("Errore nell'apertura del file");
+				printf("Procedo normalmente escludendo la scrittura sul file \n");
+				fflush(stdout);
+				strcpy(buf, temp);
+			} else {
+				strcpy(buf, temp); 
+				writen(fd, buf, strlen(buf));
+				close(fd);
+			}
+			break;
         }
         
         printf("Inserisci un username di massimo %zu caratteri!\n", len - 1);
