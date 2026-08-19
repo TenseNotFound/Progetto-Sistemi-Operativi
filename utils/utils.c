@@ -11,6 +11,7 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdint.h>
 
 
 ssize_t readn(int fd, void *buf, size_t n){

@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 volatile sig_atomic_t shutdown_flag = 0;
@@ -34,7 +35,7 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr);
 int piazzamento_navi (int socket);
 int invio_navi(int socket, posizionamento *navi);
 void getUsername(char *buf, size_t len); // per prendere l'username del nuovo giocatore
-bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
+bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, uint8_t dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
 
 struct posizionamento Nave;
 int port;
@@ -350,7 +351,7 @@ int piazzamento_navi (int socket) {
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
 		draw_grids();
 		do {
-			printf("Inserisci le coordinate della nave %s (dimensione %d) e l'orientamento (N,S,E,O):\n", ship_type[i].name, ship_type[i].size);
+			printf("Inserisci le coordinate della nave %s (dimensione %u) e l'orientamento (N,S,E,O):\n", ship_type[i].name, ship_type[i].size);
 			while(scanf("%d %d %c", &x, &y, &orientazione)!= 3 || (orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O')){ 
 				printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"); 
 				fflush(stdout);
@@ -479,7 +480,7 @@ int discovery_server(char *ip, int *port){
 }
 
 // la validazione viene poi rifatta dal server
-bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ) {
+bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, uint8_t dimensione_nave ) {
 	// la funzione si occupa di controllare e validare il piazzamento andando a controllare i limiti di griglia 
 	// marcando quale posizione risulta occupata, non è il controllo ufficiale ma serve solo in fase di posizionamento
 	// il vero controllo poi lo rifarà anche il server.

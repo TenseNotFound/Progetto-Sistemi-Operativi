@@ -126,7 +126,7 @@ void close_game(){
     exit(0);
 }
 
-void addboat(int x, int y, char orientazione, int size){
+void addboat(int x, int y, char orientazione, uint8_t size){
     int riga_off = 0;
     int col_off = 0;
 

@@ -1,6 +1,7 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
+#include <stdint.h>
 #define SHIP_NUMBER 5
 #define GRID_SIZE 10
 #define BACKLOG 16
@@ -41,7 +42,7 @@ typedef struct posizionamento{ // mi definisce la nave
 
 typedef struct navi{
     const char *name;
-    int size;
+    uint8_t size; // così un solo byte, con numeri da 0-255 rispetto a 4 byte
     posizionamento posizioni[5]; // massimo 5 navi, quindi massimo 5 posizioni
 } nave;
 

@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 typedef game_info info;
@@ -46,7 +47,7 @@ void remove_player(int id);
 player *trova_giocatore(int valore, bool flag); // serve per trovare un giocatore in base al suo id quando si vuole fare una 
                                 // mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
                                 // si può cercare tramite id (flag = false) oppure sem_id (flag = true)
-bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave, int indice); // serve per il check della formazione in entrata, INTEGRITY CHECK
+bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, uint8_t dimensione_nave, int indice); // serve per il check della formazione in entrata, INTEGRITY CHECK
 int ricezione_navi(int fd, player *me); // serve per ricevere la formazione che manda il client
 void broadcast(azioni *esito); // serve nel client_thread per fare le comunicazioni a tutti gli utenti 
 
@@ -847,7 +848,7 @@ void *udp_discovery_port(void *args){
     pthread_exit(NULL);
 }
 
-bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave, int indice){
+bool validazione_formazione(char board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, uint8_t dimensione_nave, int indice){
     // la funzione si occupa di controllare e validare il piazzamento andando a controllare i limiti di griglia 
 	// marcando quale posizione risulta occupata, non è il controllo ufficiale ma serve solo in fase di posizionamento
 	// il vero controllo poi lo rifarà anche il server.

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdint.h>
 #define BOARD_BUFFER_SIZE 4096
 #define ROSSO    "\x1b[31m"
 #define VERDE    "\x1b[32m"
@@ -24,7 +25,7 @@ extern char target_grid[GRID_SIZE][GRID_SIZE];
 void gui_init(bool flag);
 void init_board();
 void draw_board(char grid[GRID_SIZE][GRID_SIZE]);
-void addboat(int x, int y, char orientazione, int size);
+void addboat(int x, int y, char orientazione, uint8_t size);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);
 void server_connected(char *ip, int port, int id);
 int game_mode();
