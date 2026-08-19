@@ -30,10 +30,10 @@ void gui_init(bool flag){
     printf("====================================================================\n");
     printf(" Progetto Sistemi Operativi - A.A. 2025/2026                        \n");
     printf(" Realizzato da:                                                     \n");
-    printf("  * Lorenzo Tarantino (TenseNotFound)                               \n");
-    printf("  * Leonardo (lrcicalini)                                           \n");
+    printf("  [*] Lorenzo Tarantino (TenseNotFound)                             \n");
+    printf("  [*] Leonardo (lrcicalini)                                         \n");
     printf(" Link alla repository:                                              \n");
-    printf("  https://github.com/TenseNotFound/Progetto-Sistemi-Operativi       \n");
+    printf("  [*] https://github.com/TenseNotFound/Progetto-Sistemi-Operativi   \n");
     printf("====================================================================\n\n");
     
     printf("Benvenuto nel gioco battaglia navale!\n");
@@ -132,8 +132,8 @@ int game_mode(){
     char input[BUFFER_SIZE];
 
     printf("\n [*] Scegli la modalità di gioco! \n");
-    printf("   [1] 1v1 \n");
-    printf("   [2] Default [Premi invio o qualsiasi altro tasto]\n");
+    printf("    [1] 1v1 \n");
+    printf("    [2] Default [Premi INVIO o qualsiasi altro tasto]\n");
     fflush(stdout);
 
     if(fgets(input, sizeof(input), stdin) == NULL){
@@ -269,29 +269,29 @@ void spettatore(azioni *pck) {
 }
 
 void s_eliminato() {
-    printf("\n==================================================\n");
+    printf("\n=====================================================\n");
     printf(" [!] SEI STATO ELIMINATO! LA TUA FLOTTA È AFFONDATA [!]\n");
-    printf("==================================================\n");
+    printf("=======================================================\n");
     printf("[*] Rimani in attesa per guardare il resto della partita.\n");
     fflush(stdout);
 }
 
 void eliminato(int id) {
-    printf("\n[!] IL GIOCATORE %d È STATO ELIMINATO!\n", id);
+    printf("\n [!] IL GIOCATORE %d È STATO ELIMINATO!\n", id);
     fflush(stdout);
 }
 
 void s_vittoria() {
     printf("\n==================================================\n");
-    printf(" [*] VITTORIA! SEI IL DOMINATORE DEI MARI! [*] \n");
-    printf("==================================================\n");
+    printf("                [*] VITTORIA! [*]                   \n");
+    printf("===================================================\n");
     fflush(stdout);
 }
 
 void vittoria(int id) {
     printf("\n==================================================\n");
     printf(" [*] LA PARTITA È CONCLUSA! HA VINTO IL GIOCATORE %d [*] \n", id);
-    printf("==================================================\n");
+    printf("===================================================\n");
     fflush(stdout);
 }
 
