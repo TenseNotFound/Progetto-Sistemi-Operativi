@@ -576,6 +576,17 @@ gback:
             goto exit;
         }
 
+        struct timeval tv;
+        tv.tv_sec = 180;
+        tv.tv_usec = 0;
+        if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){
+            perror("Errore nell'installare il timeout di inattività sul socket del client");
+            pthread_mutex_lock(&stato.lock);
+            me->alive = 0;
+            pthread_mutex_unlock(&stato.lock);
+            goto next_turn;
+        }
+
         azioni mossa;
         if(recv_msg(fd, &mossa) == -1 || mossa.type != MOVE){
             printf("è stata ricevuta una mossa non valida oppure è stata persa la connessione da %s:%d, rimuovo il player\n", username, id);
@@ -584,6 +595,15 @@ gback:
             me->alive = 0;
             pthread_mutex_unlock(&stato.lock);
             goto next_turn; 
+        }
+        
+        tv.tv_sec = 0;
+        if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){
+            perror("Errore nella disattivazione del timer per il socket del client connesso");
+            pthread_mutex_lock(&stato.lock);
+            me->alive = 0;
+            pthread_mutex_unlock(&stato.lock);
+            goto next_turn;
         }
 
         azioni esito;
