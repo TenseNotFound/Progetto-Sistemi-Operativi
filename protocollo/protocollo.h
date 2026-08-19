@@ -27,16 +27,16 @@ typedef enum mode {
 
 typedef struct azioni{ // mi definisce la mossa
     game_info type; // specifico il tipo di azione
-    int player_id;
-    int target_id;
-    int x,y; // posizione nave da colpire
+    uint8_t player_id;
+    uint8_t target_id;
+    uint8_t x,y; // posizione nave da colpire
     mode gamemode;
     char username[USERNAME];
 } azioni;
 
 typedef struct posizionamento{ // mi definisce la nave
-    int index; //indice in ship_type
-    int x,y; //coordinate nave 
+    uint8_t index; //indice in ship_type
+    uint8_t x,y; //coordinate nave 
     char orientation; //orientamento della nave (N,S,E,O)
 }posizionamento;
 

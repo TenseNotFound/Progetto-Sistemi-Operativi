@@ -899,9 +899,9 @@ int ricezione_navi (int fd, player *me){
             return -1;
         }
 
-        index = ntohl(p.index);
-        x = ntohl(p.x);
-        y = ntohl(p.y);
+        index = p.index;
+        x = p.x; // non servono ntohl poichè lavorano su int, non su byte singolo, endianess safe in quanto solo un byte (endianess a livello di byte)
+        y = p.y;
         orientazione = p.orientation;
 
         if(index != i){

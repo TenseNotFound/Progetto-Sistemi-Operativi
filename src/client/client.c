@@ -393,9 +393,9 @@ int invio_navi(int socket, posizionamento *navi){
 	for(int i = 0; i< SHIP_NUMBER; i++){
 		posizionamento p;
 		memset(&p, 0, sizeof(p)); //pulisco prima di inviare
-		p.index = htonl(navi[i].index);
-		p.x = htonl(navi[i].x);
-		p.y = htonl(navi[i].y);
+		p.index = navi[i].index;
+		p.x = navi[i].x; // endianess safe -> mando 1 byte solo e non 4
+		p.y = navi[i].y;
 		p.orientation = navi[i].orientation;
 		if(writen(socket, &p, sizeof(posizionamento)) != sizeof(posizionamento)){
 			return -1;

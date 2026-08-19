@@ -10,7 +10,7 @@ char target_grid[GRID_SIZE][GRID_SIZE];
 
 
 typedef struct bersagli{
-    int id;
+    uint8_t id;
     char nome[USERNAME];
     struct bersagli *next;
 }nemici;
@@ -177,7 +177,7 @@ void connection_lost(void){
     fflush(stdout);
 }
 
-void bersagli(int id, char *username){
+void bersagli(uint8_t id, char *username){
     // serve per aggiungere i nuovi nemici, si usa una lista a puntatori perchè a priori non so quanti bersagli ci sono
     nemici *nemico = malloc(sizeof(nemici));
 
@@ -266,8 +266,8 @@ void errore_invio_mossa(void) {
     fflush(stdout);
 }
 
-void non_mio_turno(int id) {
-    printf(GIALLO"\n[*] È il turno del giocatore %d. In attesa...\n"RESET, id);
+void non_mio_turno(uint8_t id) {
+    printf(GIALLO"\n[*] È il turno del giocatore %u. In attesa...\n"RESET, id);
     fflush(stdout);
 }
 
@@ -311,9 +311,9 @@ void s_vittoria() {
     fflush(stdout);
 }
 
-void vittoria(int id) {
+void vittoria(uint8_t id) {
     printf(VERDE"\n==================================================\n");
-    printf(" [*] LA PARTITA È CONCLUSA! HA VINTO IL GIOCATORE %d [*] \n", id);
+    printf(" [*] LA PARTITA È CONCLUSA! HA VINTO IL GIOCATORE %u [*] \n", id);
     printf("===================================================\n"RESET);
     fflush(stdout);
 }

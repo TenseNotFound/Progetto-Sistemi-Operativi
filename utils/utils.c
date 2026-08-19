@@ -68,10 +68,10 @@ int send_msg(int fd, azioni *msg){
 
     //carico i dati in rete
     packet.type = htonl(msg->type);
-    packet.player_id = htonl(msg->player_id);
-    packet.target_id = htonl(msg->target_id);
-    packet.x = htonl(msg->x);
-    packet.y = htonl(msg->y);
+    packet.player_id = msg->player_id;
+    packet.target_id = msg->target_id;
+    packet.x = msg->x; // endianess free -> mando 1 byte e non 4, nessun problema di endiannes
+    packet.y = msg->y;
 	packet.gamemode = htonl(msg->gamemode);
 	memcpy(packet.username, msg->username, USERNAME);
 
@@ -95,10 +95,10 @@ int recv_msg(int fd, azioni *msg){
 
         //scarico i dati da rete
         msg->type = ntohl(packet.type);
-        msg->player_id = ntohl(packet.player_id);
-        msg->target_id = ntohl(packet.target_id);
-        msg->x = ntohl(packet.x);
-        msg->y = ntohl(packet.y);
+        msg->player_id = packet.player_id;
+        msg->target_id = packet.target_id;
+        msg->x = packet.x; // endianess free -> mando 1 byte e non 4, nessun problema di endiannes
+        msg->y = packet.y;
 		msg->gamemode = ntohl(packet.gamemode);
 		memcpy(msg->username, packet.username, USERNAME);
 
