@@ -577,7 +577,7 @@ gback:
         }
 
         struct timeval tv;
-        tv.tv_sec = 180;
+        tv.tv_sec = AFK_TIMEOUT;
         tv.tv_usec = 0;
         if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){
             perror("Errore nell'installare il timeout di inattività sul socket del client");
