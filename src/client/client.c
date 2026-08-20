@@ -34,7 +34,7 @@ int discovery_server(char *ip, int *port); // serve qualora non passo argomenti 
 int connetti(char *ip, int porta, struct sockaddr_in *server_addr);
 int piazzamento_navi (int socket);
 int invio_navi(int socket, posizionamento *navi);
-void getUsername(char *buf, size_t len); // per prendere l'username del nuovo giocatore
+int getUsername(char *buf, size_t len); // per prendere l'username del nuovo giocatore
 bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, uint8_t dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
 
 struct posizionamento Nave;
@@ -73,7 +73,13 @@ int main(int argc, char **argv) {
 	sa.sa_flags = 0;
 
 	if(sigaction(SIGINT, &sa, NULL) == -1 || sigaction(SIGTERM, &sa, NULL) == -1){
-		perror("Errore nell'installaziuone della sigaction");
+		perror("Errore nell'installazione della sigaction");
+		goto chiusura;
+	}
+
+	sa.sa_handler = SIG_IGN;
+	if(sigaction(SIGPIPE, &sa, NULL) == -1){
+		perror("Errore nell'installazione della sigaction per la sigpipe");
 		goto chiusura;
 	}
 
@@ -106,7 +112,7 @@ int main(int argc, char **argv) {
 	}
 
 	char username[USERNAME];
-	getUsername(username, USERNAME);
+	if(getUsername(username, USERNAME) == -1) goto chiusura;
 
 	//procedimento di handshake con il server
 	azioni msg;	
@@ -147,7 +153,11 @@ int main(int argc, char **argv) {
 
 
 	init_board();
-	piazzamento_navi(socketfd);
+	if(piazzamento_navi(socketfd) == -1){
+		printf("Impossibile comunicare al server la formazione, chiudo...\n");
+		fflush(stdout);
+		goto chiusura;
+	}
 
 	printf("\n[*] In attesa che tutti i giocatori siano pronti...\n");
     fflush(stdout);
@@ -159,7 +169,7 @@ int main(int argc, char **argv) {
 	while(vivo && !shutdown_flag){
 		memset(&pck, 0, sizeof(pck));
 		if(recv_msg(socketfd, &pck) == -1){
-			connection_lost();
+			if(!shutdown_flag) connection_lost(); // mi serve in quanto può dare -1 anche per ctrl+c
 			break;
 		}
 
@@ -173,6 +183,7 @@ int main(int argc, char **argv) {
 					turno();
 
 					azioni mossa;
+					memset(&mossa, 0, sizeof(mossa));
 					mossa.player_id = mio_id;
 
 					ricezione_mossa(&mossa);
@@ -192,7 +203,10 @@ int main(int argc, char **argv) {
 					if(pck.type == HIT){
 						esito = 'X';
 					} else esito = 'O';
-
+					
+					/*
+						SISTEMA GRIGLIA NEMICA
+					*/
 					clean_screen();
 					draw_grids();
 					target_grid[pck.x][pck.y] = esito;
@@ -251,7 +265,7 @@ chiusura:
 		fflush(stdout);
 	}
 
-	if(socketfd > 0) close(socketfd);
+	if(socketfd >= 0) close(socketfd);
 	close_game();
 	
 
@@ -284,7 +298,7 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
 	return socketfd;
 }
 
-void getUsername(char *buf, size_t len){
+int getUsername(char *buf, size_t len){
 
 	int fd = open("_user", O_RDONLY);
     if(fd == -1){
@@ -313,7 +327,9 @@ void getUsername(char *buf, size_t len){
         printf("\n[*] Inserisci il tuo username: ");
         fflush(stdout); 
         
-        scanf("%255s", temp); 
+        if(scanf("%255s", temp) == EOF){
+			return -1;
+		}
         fflush_stdin();
         
         if (strlen(temp) < len) {
@@ -333,6 +349,7 @@ void getUsername(char *buf, size_t len){
         
         printf("Inserisci un username di massimo %zu caratteri!\n", len - 1);
     }
+	return 0;
 }
 
 /*
@@ -347,12 +364,16 @@ int piazzamento_navi (int socket) {
 	int x, y;
 	char orientazione;
 	bool occupata[GRID_SIZE][GRID_SIZE] = {false}, valid; // griglia temporanea per capire dove ho messo le navi
+	int letti;
 
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
 		draw_grids();
 		do {
 			printf("Inserisci le coordinate della nave %s (dimensione %u) e l'orientamento (N,S,E,O):\n", ship_type[i].name, ship_type[i].size);
-			while(scanf("%d %d %c", &x, &y, &orientazione)!= 3 || (orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O')){ 
+			while((letti = scanf("%d %d %c", &x, &y, &orientazione))!= 3 || (orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O')){ 
+				
+				if(letti == EOF) return -1;
+
 				printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"); 
 				fflush(stdout);
 				fflush_stdin();
@@ -425,7 +446,7 @@ int discovery_server(char *ip, int *port){
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &time, sizeof(time)) < 0) {
         perror("errore nel setup del timer in setsockopt");
         close(sock);
-        pthread_exit(NULL);
+        return -1;
     }
 
 	struct sockaddr_in broadcast;
