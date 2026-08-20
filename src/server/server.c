@@ -19,6 +19,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <sys/wait.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,7 +32,8 @@ typedef azioni mosse;
 typedef struct players player;
 
 volatile sig_atomic_t timeout = 1, lobby_aperta = 1, shutdown_flag = 0;
-int port, sem1 = 0, sem2 = 0, n = 0;           
+int sem1 = -1, sem2 = -1, n = 0;
+unsigned int port;  
 /*
     sem1-> serve per i turni
     sem2-> serve per dare il via libera a tutti dopo che anche l'ultimo client connesso ha finito di disporre le navi
@@ -41,6 +43,7 @@ int port, sem1 = 0, sem2 = 0, n = 0;
 void *udp_discovery_port(void *args);
 void timeout_lobby(int sig);
 void chiusura (int sig);
+void gestore_bot (int sig);
 void *client_thread (void *args);
 void *add_player(int fd, char *username);
 void remove_player(int id);
@@ -78,6 +81,8 @@ typedef struct{
     int next_id;
     int fine;
     int active_threads; // serve per tenere traccia di quanti thread client sono attivi, così da poterli chiudere tutti in caso di poweroff
+    mode modalita;
+    int mode_scelta;
     pthread_mutex_t lock; // serve per proteggere questi valori, senza che lo dichiaro globale lo metto qui dentro
 } gstate;
 
@@ -87,6 +92,8 @@ static gstate stato = {
     0, // quanti utenti sono già connessi
     0, // inizializzazione flag per la fine
     0, // inizialmente nessun thread attivo
+    MODE_DEFAULT, // modalità di gioco di default
+    0, // se 0 ancora non scelta, appena diventa 1 è scelta
     PTHREAD_MUTEX_INITIALIZER
 };
 
@@ -97,16 +104,18 @@ int main(int argc, char **argv){
         return -1;
     }
     
-    port = atoi(argv[1]);
-    if(port < 5000 || port >65535){
-        printf("Inserisci un numero di porta valido nel range 5000-65535\n");
-        return -1;
-    }
+    srand((unsigned int)time(NULL));
+
+    int porta = atoi(argv[1]);
+    if(porta< 5000 || porta >65535){
+        printf("Devi inserire un numero di porta valido nel range 5000-65535!\n");
+        printf("Avvio la ricerca automatica della porta...\n");
+        port = 5000 + (rand() % (65535 - 5000));
+    } else port = (unsigned int) porta;
 
     printf("\n      POSIX SERVER RELEASE        \nStartup server...\n");
     fflush(stdout);
 
-    srand((unsigned int)time(NULL));
 
     int llisten = socket(AF_INET, SOCK_STREAM, 0);
     if (llisten < 0) {
@@ -128,7 +137,7 @@ int main(int argc, char **argv){
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // ip assegnato dal DHCP
 
-    int bound = 0;
+    int bound = 0; // appena ho successo mi fa uscire dal for
     for (int attempt = 0; attempt < TENTATIVI && !bound; attempt++) {
         server_addr.sin_port = htons(port);
  
@@ -136,7 +145,7 @@ int main(int argc, char **argv){
             bound = 1;
         } else if (errno == EADDRINUSE) {
             printf("Porta %d occupata, provo una porta casuale...", port);
-            port = 1024 + (rand() % (65535 - 1024));   /* range non privilegiato */
+            port = 5000 + (rand() % (65535 - 5000));   /* range non privilegiato */
         } else {
             perror("bind() fallita");
             goto exit;
@@ -155,7 +164,7 @@ int main(int argc, char **argv){
     }
 
     printf("\n==================================================\n         SERVER AVVIATO CON SUCCESSO         \n==================================================\n");
-    printf(" Indirizzo IP : 0.0.0.0 (INADDR_ANY)\n Porta        : %d\n", port);
+    printf(" Indirizzo IP : 0.0.0.0 (INADDR_ANY)\n Porta        : %u\n", port);
     printf(" Backlog      : %d (Coda massima client)\n", BACKLOG);
     printf(" Per chiudere : CTRL + C\n==================================================\n[*] In attesa di nuove connessioni...\n\n");
 
@@ -202,6 +211,15 @@ int main(int argc, char **argv){
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
         perror("Errore nell'installare la sigaction per SIGTERM, procedo con l'installazione della signal");
         if(signal(SIGTERM, chiusura) == SIG_ERR){
+            perror("Errore nell'installazione della signal");
+            goto exit;
+        }
+    }
+
+    sa.sa_handler = gestore_bot;
+    if(sigaction(SIGCHLD, &sa, NULL) == -1){
+        perror("Errore nell'installare la sigaction per SIG_CHILD, procedo con l'installazione della signal");
+        if(signal(SIGCHLD, gestore_bot) == SIG_ERR){
             perror("Errore nell'installazione della signal");
             goto exit;
         }
@@ -297,53 +315,55 @@ int main(int argc, char **argv){
         pid_t pid = fork();
         if(pid == 0){
             char porta[10];
-            snprintf(porta, sizeof(porta), "%d", port);
+            snprintf(porta, sizeof(porta), "%u", port);
             execl(".././bot", "bot", "127.0.0.1", porta, NULL);
             perror("Errore nello startup del bot");
             exit(1);
-        }
 
-        struct sockaddr_in bot;
-        socklen_t lbot = sizeof(bot);
-        int bot_fd = accept(llisten, (struct sockaddr *)&bot, &lbot);
+        } else if (pid < 0){
+            perror("Errore nella fork per l'avvio del bot");
+        } else {
+            struct sockaddr_in bot;
+            socklen_t lbot = sizeof(bot);
+            int bot_fd = accept(llisten, (struct sockaddr *)&bot, &lbot);
 
-        if(bot_fd != -1){
-            client_arg *cbot = malloc(sizeof(client_arg));
-            if(cbot == NULL){
-                perror("Errore nella malloc");
-                goto exit;
-            }
+            if(bot_fd != -1){
+                client_arg *cbot = malloc(sizeof(client_arg));
+                if(cbot == NULL){
+                    perror("Errore nella malloc");
+                    goto exit;
+                }
 
-            cbot->client_fd = bot_fd;
-            cbot->client_addr = bot;
+                cbot->client_fd = bot_fd;
+                cbot->client_addr = bot;
 
-            pthread_t tid;
-            pthread_mutex_lock(&stato.lock);
-            stato.active_threads++;
-            pthread_mutex_unlock(&stato.lock);
-
-            if(pthread_create(&tid, NULL, client_thread, cbot) != 0){
-                perror("Errore nella creazione del thread di gestione del bot");
+                pthread_t tid;
                 pthread_mutex_lock(&stato.lock);
-                stato.active_threads--;
+                stato.active_threads++;
                 pthread_mutex_unlock(&stato.lock);
-                close(bot_fd);
-                free(cbot);
-                goto exit;
-            }
-            pthread_detach(tid);
 
-        }
-        
-        n++;
+                if(pthread_create(&tid, NULL, client_thread, cbot) != 0){
+                    perror("Errore nella creazione del thread di gestione del bot");
+                    pthread_mutex_lock(&stato.lock);
+                    stato.active_threads--;
+                    pthread_mutex_unlock(&stato.lock);
+                    close(bot_fd);
+                    free(cbot);
+                    goto exit;
+                }
+                pthread_detach(tid);
+                n++;
+
+            } else perror("Errore nell'accept del bot");
+        } 
     }
 
     close(llisten);
-    
+    llisten = -1;
 
     if(n > 0){
+        
         int i = 0;
-
         pthread_mutex_lock(&stato.lock);
         for(player *p = stato.head; p!= NULL; p = p->next){
             // questo for serve per rinumerare gli id dei semafori perchè un client potrebbe scollegarsi anche in lobby
@@ -352,14 +372,13 @@ int main(int argc, char **argv){
 
         pthread_mutex_unlock(&stato.lock);
 
-        for(int i = 0; i<n; i++){
-            semctl(sem1, i, SETVAL, 0);
+        for(int j = 0; j<n; j++){
+            semctl(sem1, j, SETVAL, 0);
         }
 
         printf("[*] Lobby chiusa, ricezione nuove richieste di partecipazione bloccate\n");
         fflush(stdout);
 
-        int ret;
         struct sembuf sem;
         sem.sem_flg = 0;
         sem.sem_op = -n; // -n così mi fanno le post e torna a 0
@@ -404,36 +423,41 @@ exit:
     printf("\n[*] Routine di chiusura avviata. Pulizia risorse in corso...\n");
     fflush(stdout);
 
-    if (sem1 > 0) semctl(sem1, 0, IPC_RMID);
-
-    if (sem2 > 0) semctl(sem2, 0, IPC_RMID);
-    
-    if (llisten > 0) close(llisten);
+    if (llisten >= 0) close(llisten);
 
     // devo attendere che tutti i thread terminino
+    bool terminati = false;
     for(int max = 0; max< TIMEUOUT_SHOUTDOWN; max++){
         pthread_mutex_lock(&stato.lock);
         if(stato.active_threads == 0){
+            terminati = true;
             pthread_mutex_unlock(&stato.lock);
             break;
         } else pthread_mutex_unlock(&stato.lock);
         sleep(1);
     }
 
+    if (sem1 >= 0) semctl(sem1, 0, IPC_RMID);
+
+    if (sem2 >= 0) semctl(sem2, 0, IPC_RMID);
+
+
     pthread_mutex_lock(&stato.lock);
-    player *curr = stato.head, *temp;
-    while (curr != NULL) {
-        temp = curr;
-        curr = curr->next;
-        free(temp);
-    }
-    stato.head = NULL; 
+    if (terminati){
+        player *curr = stato.head, *temp;
+        while (curr != NULL) {
+            temp = curr;
+            curr = curr->next;
+            free(temp);
+        }
+        stato.head = NULL;
+    } else printf("[!] Ci sono ancora %d thread attivi e non terminati!\n", stato.active_threads);
+    
     pthread_mutex_unlock(&stato.lock);
     
     printf("[*] Server chiuso correttamente!\n");
     return 0;
 }
-
 
 void *client_thread(void *args){
     client_arg *cargs = (client_arg *)args;
@@ -482,10 +506,30 @@ void *client_thread(void *args){
     azioni gamemode;
     memset(&gamemode, 0, sizeof(gamemode));
     if(recv_msg(fd, &gamemode) != 0 || gamemode.type != MODE){
-        /*
-            IMPLEMENTARE UN HANDLE PER LA GAMEMODE
-        */
         printf("[!] Errore nella ricezione della gamemode dal client %s:%d\n", ip, portc);
+        goto exit;
+    }
+
+    if(gamemode.gamemode != MODE_DEFAULT && gamemode.gamemode != MODE_1V1){
+        printf("[!] Ricevuta una modalità di gioco non valida da %s:%d", ip, portc);
+        goto exit;
+    }
+
+    pthread_mutex_lock(&stato.lock);
+
+    if(!stato.mode_scelta){
+        stato.modalita = gamemode.gamemode;
+        stato.mode_scelta = 1;
+        printf("[*] Modalità di gioco impostata da %s:%d a %s\n", ip, portc, stato.modalita == MODE_1V1 ? "1v1" : " Default (TcT)");
+        fflush(stdout);
+    }
+    bool rifiutato = (stato.modalita == MODE_1V1 && stato.count > 2);
+
+    pthread_mutex_unlock(&stato.lock);
+
+    if(rifiutato){
+        printf("[!] Connessione rifiutata per %s:%d in quanto si è in 1v1 e ci sono già 2 client connessi\n", ip, portc);
+        fflush(stdout);
         goto exit;
     }
 
@@ -548,12 +592,12 @@ gback:
         pthread_mutex_lock(&stato.lock);
         for(player *p  = stato.head; p != NULL; p = p->next){
             if(p->id != id && p->alive){
-                azioni info;
-                memset(&info, 0 , sizeof(info));
-                info.type = INFO;
-                info.player_id = p->id;
-                strncpy(info.username, p->username, USERNAME-1);
-                if(send_msg(me->socket, &info) == -1){
+                azioni infopk;
+                memset(&infopk, 0 , sizeof(infopk));
+                infopk.type = INFO;
+                infopk.player_id = p->id;
+                strncpy(infopk.username, p->username, USERNAME-1);
+                if(send_msg(me->socket, &infopk) == -1){
                     printf("Errore nell'invio del pacchetto di informazioni agli altri player");
                     pthread_mutex_unlock(&stato.lock);
                     goto exit;
@@ -573,7 +617,7 @@ gback:
             pthread_mutex_lock(&stato.lock);
             me->alive = 0;
             pthread_mutex_unlock(&stato.lock);
-            goto exit;
+            goto next_turn;
         }
 
         struct timeval tv;
@@ -624,7 +668,7 @@ gback:
             esito.type = MISS;
         } else {
             char cella = bersaglio->griglia[mossa.x][mossa.y];
-            bool colpito = (cella >= '0' && cella <= '4');
+            colpito = (cella >= '0' && cella <= '4');
 
             if(colpito){
                 bersaglio->griglia[mossa.x][mossa.y] = 'X';
@@ -663,13 +707,16 @@ gback:
         
         broadcast(&esito);
 
+        int bersaglio_id = -1;
+        if(bersaglio != NULL) bersaglio_id = bersaglio->id;
+
         pthread_mutex_unlock(&stato.lock);
 
         if(eliminato){
             azioni gameover;
             memset(&gameover, 0, sizeof(gameover));
             gameover.type = ELIMINATED;
-            gameover.target_id = bersaglio->id;
+            gameover.target_id = bersaglio_id;
             
             pthread_mutex_lock(&stato.lock);
             broadcast(&gameover);
@@ -707,6 +754,21 @@ next_turn:
             pthread_mutex_lock(&stato.lock);
             broadcast(&win);
             pthread_mutex_unlock(&stato.lock);
+
+            // devo risvegliare tutti i thread in lock
+            for(int j = 0; j<n; j++){
+                struct sembuf sem;
+                sem.sem_op = 1;
+                sem.sem_flg = 0;
+                sem.sem_num = j;
+
+wake:
+                if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){
+                    perror("Errore nel risvegliare tutti i thread per fine partita");
+                    goto exit;
+                } else if (ret == -1) goto wake;
+            }
+
             goto exit;
 
         } else if (prossimo == -1) goto exit;
@@ -718,6 +780,11 @@ pass:
             perror("Errore nel rilasciare il gettone del semaforo al prossimo player");
             goto exit;
         } else if(ret == -1) goto pass;
+
+        pthread_mutex_lock(&stato.lock);
+        alive = me->alive;
+        pthread_mutex_unlock(&stato.lock);
+        if(!alive) goto exit;
     }
     
 
@@ -800,16 +867,16 @@ void remove_player(int id){
 player *trova_giocatore(int valore, bool flag){
     // permette di trovare un giocatore tramite id (con flag = false) oppure sem_id (con flag = true)
     player *current = stato.head;
-    int mode;
+    int chiave; // scelgo la chiave in base a quel che gli passo
 
     while(current != NULL){
         if(flag){
-            mode = current->sem_id;
+            chiave = current->sem_id;
         } else {
-            mode = current->id;
+            chiave = current->id;
         }
 
-        if(mode == valore){
+        if(chiave == valore){
             return current;
         }
         current = current->next;
@@ -819,7 +886,8 @@ player *trova_giocatore(int valore, bool flag){
 }
 
 void *udp_discovery_port(void *args){
-    int porta = *((int *)args), socket_fd = socket(AF_INET, SOCK_DGRAM, 0), n;
+    unsigned int porta = *((unsigned int *)args);
+    int socket_fd = socket(AF_INET, SOCK_DGRAM, 0), letti;
     
     if(socket_fd < 0){
         perror("Errore nella creazione del socket UDP");
@@ -856,16 +924,16 @@ void *udp_discovery_port(void *args){
 
     while(lobby_aperta){
         buffer[0] = '\0';
-        n = recvfrom(socket_fd, buffer, sizeof(buffer)-1, 0, (struct sockaddr *)&client_addr, &client_addr_len); // bloccata al massimo per 2s
-        if(n > 0){
-            buffer[n] = '\0';
+        letti = recvfrom(socket_fd, buffer, sizeof(buffer)-1, 0, (struct sockaddr *)&client_addr, &client_addr_len); // bloccata al massimo per 2s
+        if(letti > 0){
+            buffer[letti] = '\0';
             if(strcmp(buffer, "DISCOVER") == 0){
-                snprintf(reply, sizeof(reply), "%d", porta);
+                snprintf(reply, sizeof(reply), "%u", porta);
                 sendto(socket_fd, reply, strlen(reply), 0, (struct sockaddr *)&client_addr, client_addr_len);
                 printf("Ricevuta richiesta di discovery da %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
                 fflush(stdout);
             }
-        } else if(n < 0){
+        } else if(letti < 0){
             if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue; // se l'errore è dovuto a una segnalazione, riprovo
             perror("Errore nella ricezione del messaggio UDP");
         }
@@ -921,7 +989,7 @@ int ricezione_navi (int fd, player *me){
     for(int i = 0; i<SHIP_NUMBER; i++){
         posizionamento p; 
         memset(&p, 0, sizeof(p));
-        if(readn(fd, &p, sizeof(p))<0){
+        if(readn(fd, &p, sizeof(p)) != (size_t)sizeof(p)){
             perror("Errore nella ricezione della formazione ");
             return -1;
         }
@@ -967,4 +1035,9 @@ void timeout_lobby(int sig){
 void chiusura (int sig){
     //(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
     shutdown_flag = 1;
+}
+
+void gestore_bot(int sig){
+    //(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
+    wait(NULL);
 }
