@@ -314,7 +314,7 @@ int getUsername(char *buf, size_t len){
 		if(strlen(buf)>0) {
 			welcomeback(buf);
 			close(fd);
-			return;
+			return 0;
 		}
 		close(fd);
 	}
