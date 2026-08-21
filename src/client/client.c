@@ -203,12 +203,10 @@ int main(int argc, char **argv) {
 						esito = 'X';
 					} else esito = 'O';
 					
-					/*
-						SISTEMA GRIGLIA NEMICA
-					*/
+					target_grids[pck.target_id][pck.x][pck.y] = esito;
+					targetId = pck.target_id;
 					clean_screen();
 					draw_grids();
-					target_grid[pck.x][pck.y] = esito;
 
 					if(pck.type == HIT){
 						colpito();

@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdint.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
 
 ssize_t readn(int fd, void *buf, size_t n){
@@ -101,6 +103,7 @@ int recv_msg(int fd, azioni *msg){
         msg->y = packet.y;
 		msg->gamemode = ntohl(packet.gamemode);
 		memcpy(msg->username, packet.username, USERNAME);
+        msg->username[USERNAME -1 ] = '\0';
 
         return 0;
     } else if(n == 0){

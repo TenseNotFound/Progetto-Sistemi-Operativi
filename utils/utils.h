@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <signal.h>
+#include <sys/types.h>
 #include <string.h>
 
 extern volatile sig_atomic_t shutdown_flag; // mi serve perchè sia client.c che server.c usano un procedimento di sblocco da queste funzioni basato su shutdown_flag impostato dal gestore ad 1
