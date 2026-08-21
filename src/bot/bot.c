@@ -41,8 +41,8 @@ bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazi
 bool tentativi[GRID_SIZE][GRID_SIZE] = {false};
 bool inseguimento = false;
 int colpo_iniziale_x, colpo_iniziale_y; /* primo HIT ad aprire un inseguimento di una nave da affondare */
-int direzione_colpi_x,direzione_colpi_y = 0;
-int ultima_x, ultima_y; /* ultima cella colpita con successo durante un inseguimento */
+int direzione_colpi = -1;
+int ultimo_colpo_x, ultimo_colpo_y; /* ultima cella colpita con successo durante un inseguimento */
 bool riprovato_verso_opposto; /* per sapere se, dopo un MISS in un verso, è già stato provato il verso opposto */
 struct posizionamento Nave;
 int port;
@@ -166,7 +166,7 @@ int main(int argc, char **argv) {
 
                         case TURN:
                                 if(pck.player_id == mio_id){
-                                        selezione_prossima_mossa( &mossa.targed_id, &mossa.x, &mossa.y);
+                                        selezione_prossima_mossa( &mossa.target_id, &mossa.x, &mossa.y);
 
                                         azioni mossa;
                                         mossa.player_id = mio_id;
@@ -346,56 +346,59 @@ int recv_msg(int fd, azioni *msg){
     return -1;
 }
 
-void selezione_prossima_mossa( int *target_id, int *x_out, int*y_out ){
-        *target_id = avversario_id;
+void selezione_prossima_mossa( int *target, int *x_out, int *y_out){
+        *target = avversario_id;
+        int delta_riga[4] = {0,0,1,-1}; /* N,S,E,O */
+        int delta_colonna[4] = {-1,1,0,0};
         int x,y;
-        if(inseguimento == false) {
+        if(inseguimento == false) {ricerca(*x_out,*y_out);}
+        else if(inseguimento == true && direzione_colpi == -1){
+                for ( int i = 0;i<4;i++){
+                        x = colpo_iniziale_x + delta_riga[i];
+                        y = colpo_iniziale_y + delta_colonna[i];
+                        if (cella_papabile(x,y)){
+                                *x_out = x;
+                                *y_out = y;
+                                direzione_colpi = i;
+                                return;}
+                        }
+                }
+        else {
+                x = ultimo_colpo_x + delta_riga[direzione_colpi];
+                y = ultimo_colpo_y + delta_colonna[direzione_colpi];
+                if (cella_papabile(x,y) && !riprovato_verso_opposto){
+                        if(direzione_colpi%2 == 0) { direzione_colpi += 1;} /* serve ad invertire la direzione con cui il bot spara */
+                        else { direzione_colpi -= 1;}
+                        x = ultimo_colpo_x + delta_riga[direzione_colpi];
+                        y = ultimo_colpo_y + delta_colonna[direzione_colpi];
+                        riprovato_verso_opposto = true;
+                        }
+                else if (cella_papabile(x,y) && riprovato_verso_opposto) {
+                        riprovato_verso_opposto = false;
+                        ricerca(x_out,y_out);
+                        }
+                else {
+                        *x_out = x;
+                        *y_out = y;
+                        return;
+}
+
+void ricerca(int *x_out,int *y_out) {
+        int x,y;
         do {
                 x = rand() % GRID_SIZE;
                 y = rand() % GRID_SIZE;
-        } while (tentativi[x][y]);
+         } while (tentativi[x][y]);
         *x_out = x;
-        *y_out = y; }
-        else if(inseguimento == true && (direzione_colpi_x == 0 && direzione_colpi_y == 0)){
-                if(colpo_iniziale_x-1 >= 0 && tentativi[colpo_iniziale_x-1][colpo_iniziale_y] == false) {
-                        *x_out = colpo_iniziale_x-1;
-                        *y_out = colpo_iniziale_y;
-                        tentativi[colpo_iniziale_x-1][colpo_iniziale_y] == true;
-                        direzione_colpi_x = -1;
-                        direzione_colpi_y = 0;}
-                else if(colpo_iniziale_x+1 < GRID_SIZE && tentativi[colpo_iniziale_x+1][colpo_iniziale_y] == false) {
-                        *x_out = colpo_iniziale_x+1;
-                        *y_out = colpo_iniziale_y;
-                        tentativi[colpo_iniziale_x+1][colpo_iniziale_y] == true;
-                        direzione_colpi_x = 1;
-                        direzione_colpi_y = 0;}
-                else if(colpo_iniziale_y-1 >= 0 && tentativi[colpo_iniziale_x][colpo_iniziale_y-1] == false) {
-                        *x_out = colpo_iniziale_x;
-                        *y_out = colpo_iniziale_y-1;
-                        tentativi[colpo_iniziale_x][colpo_iniziale_y-1] == true;
-                        direzione_colpi_y = -1;
-                        direzione_colpi_x = 0;}
-                else if(colpo_iniziale_y+1 < GRID_SIZE && tentativi[colpo_iniziale_x][colpo_iniziale_y+1] == false) {
-                        *x_out = colpo_iniziale_x;
-                        *y_out = colpo_iniziale_y+1;
-                        tentativi[colpo_iniziale_x][colpo_iniziale_y+1] == true;
-                        direzione_colpi_y = 1;
-                        direzione_colpi_x = 0;}
-                }
+        *y_out = y;
+        tentativi[x][y] = true;
+        }
 
-        else if(inseguimento == true && (direzione_colpi_x != 0 || direzione_colpi_y != 0)){
-                *x_out = ultima_x + direzione_colpi_x;
-                *y_out = ultima_y + direzione_colpi_y;
-                if(*x_out <= 0 || *x_out > GRID_SIZE){
-                        *x_out = ultima_x - (2*direzione_colpi_x);
-                        if (tentativo[*x_out][*y_out] == false){
-
-}
-
-
-
-
-
+bool cella_papabile(int x,int y) {
+        if ( x >= GRID_SIZE || x < 0 || y >= GRID_SIZE || y < 0 ) { return true;}
+        else if ( tentativi[x][y] == true) { return true;}
+        else { return false;}
+        }
 
 
 
