@@ -1,0 +1,5 @@
+battaglia_server
+battaglia_client
+bot
+*.o
+*.out
