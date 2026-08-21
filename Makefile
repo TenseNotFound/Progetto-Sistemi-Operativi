@@ -10,6 +10,9 @@ client:
 bot:
 	gcc src/bot/bot.c utils/utils.c protocollo/protocollo.c -o bot -lpthread
 
+clean:
+	rm -f battaglia_server battaglia_client bot
+
 help:
 	@echo "\n
 		   Per compilare tutto digitare 'make all'. \n
