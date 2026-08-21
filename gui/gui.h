@@ -20,10 +20,12 @@
 #define MANCATO  GIALLO
 
 extern char grid[GRID_SIZE][GRID_SIZE];
-extern char target_grid[GRID_SIZE][GRID_SIZE];
+extern char target_grids[MAX_PLAYER +1 ][GRID_SIZE][GRID_SIZE];
+extern uint8_t targetId;
 
 void gui_init(bool flag);
 void init_board();
+void init_target_board(uint8_t id);
 void draw_board(char grid[GRID_SIZE][GRID_SIZE]);
 void addboat(int x, int y, char orientazione, uint8_t size);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);

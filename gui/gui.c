@@ -6,7 +6,9 @@
 #include <string.h>
 
 char grid[GRID_SIZE][GRID_SIZE];
-char target_grid[GRID_SIZE][GRID_SIZE];
+char target_grids[MAX_PLAYER +1][GRID_SIZE][GRID_SIZE]; // MAX_PLAYER +1 perchè gli id partono da 0
+static bool grigliaN_inizializz[MAX_PLAYER +1] = {false}; // tiene traccia di quale grilia è inizializzata o meno
+uint8_t targetId = 0;
 
 
 typedef struct bersagli{
@@ -50,7 +52,10 @@ void server_connected(char *ip, int port, int id){
 
 void init_board(){
     cleanup_board(grid);
-    cleanup_board(target_grid);
+    targetId = 0;
+    for(int i = 0; i<MAX_PLAYER; i++){
+        grigliaN_inizializz[i] = false; 
+    }
     draw_board(grid);
 }
 
@@ -59,6 +64,14 @@ void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]){
         for(int j = 0; j<GRID_SIZE; j++){
             grid[i][j] = '~';
         }
+    }
+}
+
+void init_target_board(uint8_t id){
+    if(id > MAX_PLAYER) return;
+    if(!grigliaN_inizializz[id]) {
+        cleanup_board(target_grids[id]);
+        grigliaN_inizializz[id] = true;
     }
 }
 
@@ -112,7 +125,12 @@ void draw_grids(){
     draw_board(grid); 
     
     printf(ROSSO"\n--- RADAR NEMICO ---\n"RESET);
-    draw_board(target_grid);
+    if(targetId == 0) {
+        printf(GIALLO"[!] Nessun nemico ancora selezionato\n"RESET);
+    } else {
+        printf("[*] Radar del player id:%d\n");
+        draw_board(target_grids[targetId]);
+    }
 }
 
 void clean_screen(){
@@ -120,9 +138,9 @@ void clean_screen(){
 }
 
 void close_game(){
+    clean_screen();
     printf("Grazie per aver giocato! Arrivederci!\n");
     fflush(stdout);
-    clean_screen();
     exit(0);
 }
 
@@ -193,7 +211,6 @@ void bersagli(uint8_t id, char *username){
     target = nemico;
 }
 
-
 void turno() {
     printf(VERDE"\n==================================================\n");
     printf(" [*] È IL TUO TURNO \n");
@@ -228,17 +245,26 @@ void ricezione_mossa(azioni *mossa) {
     bool mossa_valida = false;
 
     mossa->type = MOVE;
-
+    int letti;
     while (!mossa_valida) {
         
         printf("\nInserisci l'ID del giocatore da colpire: ");
-        scanf("%d", &bersaglio);
-        fflush_stdin(); 
+        if( (letti = scanf("%d", &bersaglio)) == EOF) close_game();
+        if(letti != 1 || bersaglio < 1 || bersaglio > MAX_PLAYER) {
+            printf(GIALLO"[!] Inserisci un id valido\n"RESET);
+            fflush_stdin(); 
+            continue;
+        }
 
         printf("Inserisci le coordinate <Y> <n>: ");
-        scanf(" %c %d", &x_in, &y);
-        fflush_stdin();
-
+        letti = scanf(" %c %d", &x_in, &y);
+        if(letti == EOF) close_game();
+        if(letti != 2){
+            printf("[!] Inserisci delle coordinate valide !\n"RESET);
+            fflush_stdin();
+            continue;
+        }
+        
         y = y - 1;
         int x = -1;
 
@@ -246,13 +272,14 @@ void ricezione_mossa(azioni *mossa) {
         else if (x_in >= 'A' && x_in <= 'J') x = x_in - 'A';
 
         if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-            // verifica se le coordinate sono nei limiti
-            if (target_grid[x][y] == 'X' || target_grid[x][y] == 'O') {
+            init_target_board((uint8_t)bersaglio);
+            if (target_grids[bersaglio][x][y] == 'X' || target_grids[bersaglio][x][y] == 'O') {
                 printf(GIALLO"[!] Hai già sparato in queste coordinate. Scegli un altro bersaglio!\n"RESET);
             } else {
                 mossa->target_id = bersaglio;
                 mossa->x = x;
                 mossa->y = y;
+                targetId = (uint8_t)bersaglio;
                 mossa_valida = true;
             }
         } else {
