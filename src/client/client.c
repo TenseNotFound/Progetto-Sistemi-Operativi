@@ -37,7 +37,6 @@ int invio_navi(int socket, posizionamento *navi);
 int getUsername(char *buf, size_t len); // per prendere l'username del nuovo giocatore
 bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, uint8_t dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
 
-struct posizionamento Nave;
 int port;
 
 
