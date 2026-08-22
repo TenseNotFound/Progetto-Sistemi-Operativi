@@ -32,7 +32,7 @@ typedef azioni mosse;
 typedef struct players player;
 
 volatile sig_atomic_t timeout = 1, lobby_aperta = 1, shutdown_flag = 0;
-int sem1 = -1, sem2 = -1, n = 0;
+int sem1 = -1, sem2 = -1, n = 0 /*client attivi -> serve per le post su sem2*/, slot = 0 /*quanti sem_id assegnati contando anche quelli di quit*/;
 unsigned int port;  
 /*
     sem1-> serve per i turni
@@ -45,7 +45,7 @@ void timeout_lobby(int sig);
 void chiusura (int sig);
 void gestore_bot (int sig);
 void *client_thread (void *args);
-void *add_player(int fd, char *username);
+void *add_player(int fd, char *username, int sem_id);
 void remove_player(int id);
 player *trova_giocatore(int valore, bool flag); // serve per trovare un giocatore in base al suo id quando si vuole fare una 
                                 // mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
@@ -59,6 +59,7 @@ void broadcast(azioni *esito); // serve nel client_thread per fare le comunicazi
 typedef struct{ // descrive il client
     int client_fd;
     struct sockaddr_in client_addr;
+    int sem_id; // valore transitorio che poi viene passato come argomento al thread client che lo inserisce nella struct privata player
 }client_arg;
 
 
@@ -283,6 +284,7 @@ int main(int argc, char **argv){
         //mi salvo tutte le informazioni riferite al client connesso nella struttura e invio poi al thread di gestione
         cargs->client_fd = client;
         cargs->client_addr = client_addr;
+        cargs->sem_id = current_player;
 
         pthread_t tid;
 
@@ -336,6 +338,7 @@ int main(int argc, char **argv){
 
                 cbot->client_fd = bot_fd;
                 cbot->client_addr = bot;
+                cbot->sem_id = current_player;
 
                 pthread_t tid;
                 pthread_mutex_lock(&stato.lock);
@@ -353,26 +356,31 @@ int main(int argc, char **argv){
                 }
                 pthread_detach(tid);
                 n++;
+                current_player++;
 
             } else perror("Errore nell'accept del bot");
         } 
     }
 
+    slot = current_player;
     close(llisten);
     llisten = -1;
 
     if(n > 0){
+        /*
+                CAUSA RACE CONDITION E ROMPE LA CONSISTENZA DEI SEM_ID
+            int i = 0;
+            pthread_mutex_lock(&stato.lock);
+            for(player *p = stato.head; p!= NULL; p = p->next){
+                // questo for serve per rinumerare gli id dei semafori perchè un client potrebbe scollegarsi anche in lobby
+                p->sem_id = i++;
+            }
+
+            pthread_mutex_unlock(&stato.lock);
+        */
         
-        int i = 0;
-        pthread_mutex_lock(&stato.lock);
-        for(player *p = stato.head; p!= NULL; p = p->next){
-            // questo for serve per rinumerare gli id dei semafori perchè un client potrebbe scollegarsi anche in lobby
-            p->sem_id = i++;
-        }
 
-        pthread_mutex_unlock(&stato.lock);
-
-        for(int j = 0; j<n; j++){
+        for(int j = 0; j<slot; j++){
             semctl(sem1, j, SETVAL, 0);
         }
 
@@ -395,8 +403,25 @@ try:
 
         struct sembuf startup;
         startup.sem_flg = 0;
-        startup.sem_num = 0;
         startup.sem_op = 1;
+        int primo = -1; // lo uso per trovare il primo giocatore vivo a cui dare il gettone 
+
+        pthread_mutex_lock(&stato.lock);
+        for(int j = 0; j<slot; j++){
+            // ricerco il primo giocatore disponibile da cui far partire la partita
+            player *p = trova_giocatore(j, true);
+            if(p != NULL && p->alive) {
+                primo = j;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&stato.lock);
+
+        if(primo == -1){
+            printf("[!] Impossibile trovare un giocatore disponibile per lo startup\n");
+            fflush(stdout);
+            goto exit;
+        } else sem.sem_num = primo;
 
 start:
         if((ret = semop(sem1, &startup, 1)) == -1 && errno != EINTR){
@@ -484,7 +509,7 @@ void *client_thread(void *args){
 
     msg.username[USERNAME -1] = '\0';
 
-    me = add_player(fd, msg.username);
+    me = add_player(fd, msg.username, cargs->sem_id);
 
     if (me == NULL) {
         printf("(Server) Impossibile creare struct player per %s:%d\n", ip, portc);
@@ -728,8 +753,8 @@ next_turn:
         pthread_mutex_lock(&stato.lock);
         int prossimo = -1; 
         int test = semid;
-        for(int i = 0; i<n; i++){
-            test = (test +1) %n;
+        for(int i = 0; i<slot; i++){
+            test = (test +1) %slot;
             if (test == semid) continue;
             player *p = trova_giocatore(test, true); // true specifica se ricerca per numero di semaforo, false solo con id
             if(p != NULL && p->alive){ 
@@ -756,7 +781,7 @@ next_turn:
             pthread_mutex_unlock(&stato.lock);
 
             // devo risvegliare tutti i thread in lock
-            for(int j = 0; j<n; j++){
+            for(int j = 0; j<slot; j++){
                 struct sembuf sem;
                 sem.sem_op = 1;
                 sem.sem_flg = 0;
@@ -803,7 +828,7 @@ exit:
     
 }
 
-void *add_player(int fd, char *username){
+void *add_player(int fd, char *username, int sem_id){
 
     // serve per aggiungere un nuovo player, non necessita di lock su mutex stato.lock perchè viene già fatto qui dentro
     player *new_player = malloc(sizeof(player));
@@ -830,7 +855,7 @@ void *add_player(int fd, char *username){
 
     stato.next_id++;
     new_player->id = stato.next_id;
-    new_player->sem_id = new_player->id -1;
+    new_player->sem_id = sem_id;
 
     new_player->next = stato.head;
     stato.head = new_player;
