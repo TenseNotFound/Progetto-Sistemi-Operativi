@@ -1,5 +1,6 @@
 battaglia_server
-battaglia_client
+battaglia_client.*
 bot
+_user
 *.o
 *.out
