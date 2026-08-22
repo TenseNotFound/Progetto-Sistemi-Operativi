@@ -1,6 +1,7 @@
 #include "gui.h"
 #include "../protocollo/protocollo.h"
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
@@ -134,7 +135,7 @@ void draw_grids(){
 }
 
 void clean_screen(){
-    system("clear");
+    printf(CLEAN); //codice ANSI per pulire lo schermo
 }
 
 void close_game(){

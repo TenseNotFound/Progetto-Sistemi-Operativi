@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #define BOARD_BUFFER_SIZE 4096
+// codici ANSI per i colori
 #define ROSSO    "\x1b[31m"
 #define VERDE    "\x1b[32m"
 #define GIALLO   "\x1b[33m"
@@ -13,6 +14,7 @@
 #define CIANO    "\x1b[36m"
 #define BIANCO   "\x1b[37m"
 #define RESET    "\x1b[0m" // colore di default del terminale
+#define CLEAN "\033[H\033[J" // comando ANSI per ripulire
 
 #define ACQUA    CIANO
 #define NAVE     BIANCO

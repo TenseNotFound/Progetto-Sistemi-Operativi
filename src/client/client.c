@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
 	aperto = true;
 	HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
 	DWORD console_mode = 0;
-	if(hout != INVALID_HANDLE_VALUE && GetConsoleMode(hout, &console_mode)) SetConsoleMode(hout, console_mode|ENABLE_VIRTUAL_TERMINA_PROCESSING);
+	if(hout != INVALID_HANDLE_VALUE && GetConsoleMode(hout, &console_mode)) SetConsoleMode(hout, console_mode|ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 
 	if(!SetConsoleCtrlHandler(ctrl_handler, TRUE)){
 		fprintf(stderr,"Errore nell'installazione del gestore per il Ctrl+C (WINAPI)\n");
@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
 	}
 
 	if(welcome_msg.type != WELCOME){
-		fprintf("messaggio di benvenuto non valido\n");
+		fprintf(stderr, "messaggio di benvenuto non valido\n");
 		goto chiusura;
 	}
 
@@ -355,26 +355,28 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
 
 int getUsername(char *buf, size_t len){
 
-	int fd = open("_user", O_RDONLY);
-    if(fd == -1){
+	// poichè causa portabilità di open non funziona su WINAPI, uso fopen
+	FILE *fd = fopen("_user", "r");
+    if(fd == NULL){
         fprintf(stderr,"Errore nell'apertura del file di gestione degli utenti\n");
         
     } else {
 		buf[0] = '\0';
-		ssize_t letti = read(fd, buf, len-1);
-		if(letti > 0){
-			buf[letti] = '\0';
-			if (buf[letti - 1] == '\n') {
-        		buf[letti - 1] = '\0';
-    		}
+		if(fgets(buf, len, fd) != NULL){
+			size_t letti = strlen(buf);
+
+			if(letti >0 && buf[letti -1] == '\n'){
+				buf[letti-1] = '\0';
+			}
+			
+			if(strlen(buf)>0) {
+				welcomeback(buf);
+				fclose(fd);
+				return 0;
+			}
 		}
 
-		if(strlen(buf)>0) {
-			welcomeback(buf);
-			close(fd);
-			return 0;
-		}
-		close(fd);
+		fclose(fd);
 	}
 
 	char temp[BUFFER_SIZE];
@@ -388,20 +390,19 @@ int getUsername(char *buf, size_t len){
         fflush_stdin();
         
         if (strlen(temp) < len) {
-			int fd = open("_user", O_CREAT|O_WRONLY|O_TRUNC, 0664);
-			if(fd == -1){
+			FILE *fd = fopen("_user", "w");
+			if(fd == NULL){
 				fprintf(stderr,"Errore nell'apertura del file\n");
 				printf("Procedo normalmente escludendo la scrittura sul file \n");
 				fflush(stdout);
 				strcpy(buf, temp);
 			} else {
 				strcpy(buf, temp); 
-				write(fd, buf, strlen(buf));
-				close(fd);
+				fputs(buf, fd);
+				fclose(fd);
 			}
 			break;
         }
-        
         printf("Inserisci un username di massimo %zu caratteri!\n", len - 1);
     }
 	return 0;
@@ -498,7 +499,7 @@ int discovery_server(char *ip, int *port){
 		return -1;
 	}
 #ifdef _WIN32
-	DWORD timeout_sock = 2000; // portare in protocollo e fixare 
+	DWORD timeout_sock = TIMEOUT_SOCKET * 1000; // portare in protocollo e fixare 
 	if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_sock, sizeof(timeout_sock)) < 0) {
         fprintf(stderr,"errore nel setup del timer in setsockopt\n");
         chiudi_socket(sock);
@@ -506,7 +507,7 @@ int discovery_server(char *ip, int *port){
     }
 #else
 	struct timeval time; // dal man di setsockopt
-    time.tv_sec = 2; 
+    time.tv_sec = TIMEOUT_SOCKET; 
     time.tv_usec = 0;
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &time, sizeof(time)) < 0) {
         fprintf(stderr,"errore nel setup del timer in setsockopt\n");

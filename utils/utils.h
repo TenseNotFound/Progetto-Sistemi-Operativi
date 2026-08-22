@@ -15,9 +15,9 @@
 
 #ifdef _WIN32
     #include <winsock2.h>
-    #include <ws2tcpip>
+    #include <ws2tcpip.h>
 #else
-    #include <sys/socket>
+    #include <sys/socket.h>
     #include <netinet/in.h>
     #include <netdb.h>
     #include <arpa/inet.h>
@@ -29,8 +29,8 @@ extern volatile sig_atomic_t shutdown_flag; // mi serve perchè sia client.c che
 #ifdef _WIN32
     int recv_msg(SOCKET fd, azioni *msg); // IDENTICA -> serve per la ricezione di messaggi 
     int send_msg(SOCKET fd, azioni *msg); // IDENTICA -> serve per la spedizione di messaggi
-    ssize_t readn(SOCKET fd, const void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete		IDENTICA
-    ssize_t writen(SOCKET fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete 	IDENTICA
+    SSIZE_T readn(SOCKET fd, const void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete		IDENTICA
+    SSIZE_T writen(SOCKET fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete 	IDENTICA
 #else
     int recv_msg(int fd, azioni *msg); // IDENTICA -> serve per la ricezione di messaggi 
     int send_msg(int fd, azioni *msg); // IDENTICA -> serve per la spedizione di messaggi

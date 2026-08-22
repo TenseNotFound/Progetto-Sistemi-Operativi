@@ -15,6 +15,8 @@
 #include <unistd.h>
 #ifndef _WIN32
     #include <arpa/inet.h>
+#else
+    #include <windows.h>
 #endif
 
 #ifndef _WIN32
@@ -67,7 +69,7 @@ ssize_t writen(int fd, const void *buff, size_t n){
 }
 
 #else
-    ssize_t readn(SOCKET fd, void *buf, size_t n){
+    SSIZE_T readn(SOCKET fd, void *buf, size_t n){
     /*
         QUESTA FUNZIONE SERVE PER IL CONTROLLO
         DELL'AVVENUTA LETTURA DI TUTTI I DATI IN RETE
@@ -77,7 +79,7 @@ ssize_t writen(int fd, const void *buff, size_t n){
     char *p = (char *)buf;
 
     while(left >0){
-        int r = recv(fd, p, left);
+        int r = recv(fd, p, (int)left, 0);
         if(r<0){
             if(r == SOCKET_ERROR) return -1; // errore nel socket non dovuto da segnalazione
             return -1;
@@ -89,7 +91,7 @@ ssize_t writen(int fd, const void *buff, size_t n){
     return (ssize_t)n; // se arrivo qui ho letto tutti i byte richiesti e comunico con n
 }
 
-ssize_t writen(SOCKET fd, const void *buff, size_t n){
+SSIZE_T writen(SOCKET fd, const void *buff, size_t n){
     /*
         QUESTA FUNZIONE SERVE PER IL CONTROLLO
         DELL'AVVENUTA SCRITTURA DI TUTTI I DATI IN RETE
@@ -98,7 +100,7 @@ ssize_t writen(SOCKET fd, const void *buff, size_t n){
     size_t left = n;
     const char *p = (const char *)buff;
     while(left > 0){ // > e non < perchè è unisgned e non può essere negativo
-        int w = write(fd, p, left);
+        int w = send(fd, p, (int)left, 0);
         if(w<0){
             if(w == SOCKET_ERROR) return -1; // errore nel socket non dovuto da segnalazione
             return -1;
@@ -126,13 +128,22 @@ int send_msg(int fd, azioni *msg){
     packet.y = msg->y;
 	packet.gamemode = htonl(msg->gamemode);
 	memcpy(packet.username, msg->username, USERNAME);
+// c'è rischio che in TCP si scrivano meno byte di quelli richiesti,
 
+#ifdef _WIN32
+    SSIZE_T n = writen(fd, &packet, sizeof(azioni));
+    // c'è rischio che in TCP si scrivano meno byte di quelli richiesti,
+    if(n != (SSIZE_T)(sizeof(azioni))){
+        return -1;
+    }
+#else
     ssize_t n = writen(fd, &packet, sizeof(azioni));
     // c'è rischio che in TCP si scrivano meno byte di quelli richiesti,
-
     if(n != (ssize_t)(sizeof(azioni))){
         return -1;
     }
+#endif
+
     return 0;
 }
 
@@ -143,11 +154,20 @@ int recv_msg(int fd, azioni *msg){
 #endif
     azioni packet;
 
-    ssize_t n = readn(fd, &packet, sizeof(azioni));
+#ifdef _WIN32
+    SSIZE_T n = readn(fd, &packet, sizeof(azioni));
     // c'è rischio che in TCP si ricevano meno byte di quelli richiesti, 
     // quindi bisogna fare un ciclo finchè non si ricevono tutti i byte
+    if(n == (SSIZE_T)(sizeof(azioni))){
+#else
+        ssize_t n = readn(fd, &packet, sizeof(azioni));
+        // c'è rischio che in TCP si ricevano meno byte di quelli richiesti, 
+        // quindi bisogna fare un ciclo finchè non si ricevono tutti i byte
+        if(n == (ssize_t)(sizeof(azioni))){
+#endif
+    
 
-    if(n == (ssize_t)(sizeof(azioni))){
+    
 
         //scarico i dati da rete
         msg->type = ntohl(packet.type);
