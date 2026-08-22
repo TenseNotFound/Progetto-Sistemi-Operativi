@@ -41,7 +41,7 @@ int colpo_iniziale_x, colpo_iniziale_y; /* primo HIT ad aprire un inseguimento d
 int direzione_colpi = -1;
 int direzione_tentata = -1;
 int ultimo_colpo_x, ultimo_colpo_y; /* ultima cella colpita con successo durante un inseguimento */
-bool riprovato_verso_opposto; /* per sapere se, dopo un MISS in un verso, è già stato provato il verso opposto */
+bool riprovato_verso_opposto = false; /* per sapere se, dopo un MISS in un verso, è già stato provato il verso opposto */
 int port, avversario_id = -1;
 
 int main(int argc, char **argv) {
@@ -172,9 +172,6 @@ int main(int argc, char **argv) {
                                                   colpo_iniziale_y = pck.y;
                                                   ultimo_colpo_x = pck.x;
                                                   ultimo_colpo_y = pck.y;
-                                                  direzione_colpi = -1;
-                                                  direzione_tentata = -1;
-                                                  riprovato_verso_opposto = false;
                                                 } else if (direzione_colpi == -1) {
                                                   direzione_colpi = direzione_tentata;
                                                   direzione_tentata = -1;
