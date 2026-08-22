@@ -9,11 +9,14 @@ server:
 client:
 	@gcc src/client/client.c utils/utils.c protocollo/protocollo.c gui/gui.c -o battaglia_client -lpthread
 
+client_windows:
+	@gcc src/client/client.c utils/utils.c protocollo/protocollo.c gui/gui.c -o battaglia_client.exe -lws2_32 -lpthread
+
 bot:
 	@gcc src/bot/bot.c utils/utils.c protocollo/protocollo.c -o bot -lpthread
 
 clean:
-	rm -f battaglia_server battaglia_client bot
+	rm -f battaglia_server battaglia_client battaglia_client.exe bot
 
 help:
 	@echo "Per compilare tutto digitare 'make all'."
