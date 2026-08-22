@@ -12,10 +12,13 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
+
+#ifndef _WIN32
+	#include <sys/socket.h>
+	#include <netinet/in.h>
+	#include <netdb.h>
+	#include <arpa/inet.h>
+#endif
 
 #ifdef _WIN32
 	#include <windows.h>
@@ -61,18 +64,18 @@ int main(int argc, char **argv) {
 	WSADATA wsa;
 
 	bool aperto = false;
-	if(WSAStartup(&wsa, &ready) != 0){
-		perror("Errore nello startup del socket (WINAPI)");
+	if(WSAStartup(MAKEWORD(2,2), &wsa) != 0){
+		fprintf(stderr,"Errore nello startup del socket (WINAPI)\n");
 		return -1;
 	}
 
 	aperto = true;
 	HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
 	DWORD console_mode = 0;
-	if(hout != INVALID_HANDLE_VALUE && GetConsoleMode(&hout, &console_mode)) SetConsoleMode(&hout, console_mode|ENABLE_VIRTUAL_TERMINA_PROCESSING);
+	if(hout != INVALID_HANDLE_VALUE && GetConsoleMode(hout, &console_mode)) SetConsoleMode(hout, console_mode|ENABLE_VIRTUAL_TERMINA_PROCESSING);
 
 	if(!SetConsoleCtrlHandler(ctrl_handler, TRUE)){
-		perror("Errore nell'installazione del gestore per il Ctrl+C (WINAPI)");
+		fprintf(stderr,"Errore nell'installazione del gestore per il Ctrl+C (WINAPI)\n");
 		WSACleanup();
 		return -1;
 	}
@@ -102,20 +105,20 @@ int main(int argc, char **argv) {
 		}
 		strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
 	}
-#ifndef __WIN32
+#ifndef _WIN32
 	struct sigaction sa;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_handler = gestore;
 	sa.sa_flags = 0;
 
 	if(sigaction(SIGINT, &sa, NULL) == -1 || sigaction(SIGTERM, &sa, NULL) == -1){
-		perror("Errore nell'installazione della sigaction");
+		fprintf(stderr, "Errore nell'installazione della sigaction\n");
 		goto chiusura;
 	}
 
 	sa.sa_handler = SIG_IGN;
 	if(sigaction(SIGPIPE, &sa, NULL) == -1){
-		perror("Errore nell'installazione della sigaction per la sigpipe");
+		fprintf(stderr, "Errore nell'installazione della sigaction per la sigpipe\n");
 		goto chiusura;
 	}
 #endif
@@ -157,18 +160,18 @@ int main(int argc, char **argv) {
 	msg.username[USERNAME -1] = '\0';
 	msg.type = JOIN;
 	if(send_msg(socketfd, &msg) == -1){
-		perror("errore nell'invio del messaggio di JOIN");
+		fprintf(stderr,"errore nell'invio del messaggio di JOIN\n");
 		goto chiusura;
 	}
 
 	azioni welcome_msg;
 	if(recv_msg(socketfd, &welcome_msg) == -1){
-		perror("errore nella ricezione del messaggio di WELCOME");
+		fprintf(stderr, "errore nella ricezione del messaggio di WELCOME\n");
 		goto chiusura;
 	}
 
 	if(welcome_msg.type != WELCOME){
-		printf("messaggio di benvenuto non valido\n");
+		fprintf("messaggio di benvenuto non valido\n");
 		goto chiusura;
 	}
 
@@ -183,7 +186,7 @@ int main(int argc, char **argv) {
 	mode_msg.gamemode = game_mode();
 
 	if(send_msg(socketfd, &mode_msg) == -1){
-		perror("errore nell'invio della modalità di gioco");
+		fprintf(stderr,"errore nell'invio della modalità di gioco\n");
 		goto chiusura;
 	}
 
@@ -303,7 +306,7 @@ chiusura:
 		chiudi_socket(socketfd);
 		socketfd = -1;
 	}
-#ifdef _WINAPI
+#ifdef _WIN32
 	if(aperto) WSACleanup();
 #endif
 
@@ -319,7 +322,7 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
 	server_addr->sin_port = htons(porta);
 
 #ifdef _WIN32
-	if (inet_pton(ip, &server_addr->sin_addr) == 0) {
+	if (inet_pton(AF_INET, ip, &server_addr->sin_addr) != 1) {
         printf("indirizzo ip non valido: %s\n", ip);
         return -1;
     }
@@ -337,12 +340,12 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
 #endif
 
 	if(sfd == -1){
-		perror("Errore nell'apertura del socket di connessione");
+		fprintf(stderr,"Errore nell'apertura del socket di connessione\n");
 		return -1;
 	}
 
 	if(connect(sfd, (struct sockaddr *)server_addr, sizeof(struct sockaddr_in)) == -1){
-		perror("Errore nella connessione al server");
+		fprintf(stderr, "Errore nella connessione al server\n");
 		chiudi_socket(sfd);
 		return -1;
 	}
@@ -354,11 +357,11 @@ int getUsername(char *buf, size_t len){
 
 	int fd = open("_user", O_RDONLY);
     if(fd == -1){
-        perror("Errore nell'apertura del file di gestione degli utenti");
+        fprintf(stderr,"Errore nell'apertura del file di gestione degli utenti\n");
         
     } else {
 		buf[0] = '\0';
-		ssize_t letti = readn(fd, buf, len-1);
+		ssize_t letti = read(fd, buf, len-1);
 		if(letti > 0){
 			buf[letti] = '\0';
 			if (buf[letti - 1] == '\n') {
@@ -387,13 +390,13 @@ int getUsername(char *buf, size_t len){
         if (strlen(temp) < len) {
 			int fd = open("_user", O_CREAT|O_WRONLY|O_TRUNC, 0664);
 			if(fd == -1){
-				perror("Errore nell'apertura del file");
+				fprintf(stderr,"Errore nell'apertura del file\n");
 				printf("Procedo normalmente escludendo la scrittura sul file \n");
 				fflush(stdout);
 				strcpy(buf, temp);
 			} else {
 				strcpy(buf, temp); 
-				writen(fd, buf, strlen(buf));
+				write(fd, buf, strlen(buf));
 				close(fd);
 			}
 			break;
@@ -455,7 +458,7 @@ int piazzamento_navi (int socket) {
 	draw_grids();
 
 	if(invio_navi(socket, posizioni_navi) == -1){
-		printf(stderr, "errore nell'invio delle posizioni delle navi");
+		fprintf(stderr, "errore nell'invio delle posizioni delle navi\n");
 		return -1;
 	}
 
@@ -470,9 +473,7 @@ int invio_navi(int socket, posizionamento *navi){
 		p.x = navi[i].x; // endianess safe -> mando 1 byte solo e non 4
 		p.y = navi[i].y;
 		p.orientation = navi[i].orientation;
-		if(writen(socket, &p, sizeof(posizionamento)) != sizeof(posizionamento)){ // cambia qua per WIN --FIX
-			return -1;
-		}
+		if(writen(socket, &p, sizeof(posizionamento)) != sizeof(posizionamento)) return -1;
 	}
 	return 0;
 }
@@ -486,20 +487,20 @@ int discovery_server(char *ip, int *port){
 #endif
 	
 	if(sock == -1){
-		perror("Errore nell'apertura del socket per l'UDP");
+		fprintf(stderr,"Errore nell'apertura del socket per l'UDP\n");
 		return -1;
 	}
 
 	int abilitata = 1;
 	if(setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&abilitata, sizeof(abilitata))<0){
-		perror("Errore nell'abilitare la modalità broadcast sul socket di discovery");
+		fprintf(stderr,"Errore nell'abilitare la modalità broadcast sul socket di discovery\n");
 		chiudi_socket(sock);
 		return -1;
 	}
 #ifdef _WIN32
 	DWORD timeout_sock = 2000; // portare in protocollo e fixare 
 	if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_sock, sizeof(timeout_sock)) < 0) {
-        perror("errore nel setup del timer in setsockopt");
+        fprintf(stderr,"errore nel setup del timer in setsockopt\n");
         chiudi_socket(sock);
         return -1;
     }
@@ -508,7 +509,7 @@ int discovery_server(char *ip, int *port){
     time.tv_sec = 2; 
     time.tv_usec = 0;
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &time, sizeof(time)) < 0) {
-        perror("errore nel setup del timer in setsockopt");
+        fprintf(stderr,"errore nel setup del timer in setsockopt\n");
         chiudi_socket(sock);
         return -1;
     }
@@ -532,7 +533,7 @@ int discovery_server(char *ip, int *port){
 	for(int i = 0; i<TENTATIVI; i++){
 
 		if(sendto(sock, DISCOVER, strlen(DISCOVER), 0, (struct sockaddr *)&broadcast, sizeof(broadcast))<0){
-			printf(stderr, "Errore nell'inviare il payload di discovery");
+			fprintf(stderr, "Errore nell'inviare il payload di discovery\n");
 			chiudi_socket(sock);
 			return -1;
 		}
@@ -597,15 +598,13 @@ bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazi
 
 #ifdef _WIN32
 static void chiudi_socket(SOCKET fd){
-
-	closesocket((SOCKET)fd);
-
+	closesocket(fd);
 }
 
 BOOL WINAPI ctrl_handler(DWORD sig){
 	if(sig == CTRL_C_EVENT || sig == CTRL_BREAK_EVENT || sig == CTRL_CLOSE_EVENT){
 		shutdown_flag = 1;
-		if(socketfd >= 0) chiudi_socket(socketfd);
+		if(socketfd != -1) chiudi_socket(socketfd);
 		return TRUE;
 	}
 	return FALSE;

@@ -13,9 +13,11 @@
 #include <signal.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <arpa/inet.h>
+#ifndef _WIN32
+    #include <arpa/inet.h>
+#endif
 
-
+#ifndef _WIN32
 ssize_t readn(int fd, void *buf, size_t n){
     /*
         QUESTA FUNZIONE SERVE PER IL CONTROLLO
@@ -64,7 +66,55 @@ ssize_t writen(int fd, const void *buff, size_t n){
     return (ssize_t)n; // se arrivo qui ho scritto tutti i byte richiesti e comunico con n
 }
 
+#else
+    ssize_t readn(SOCKET fd, void *buf, size_t n){
+    /*
+        QUESTA FUNZIONE SERVE PER IL CONTROLLO
+        DELL'AVVENUTA LETTURA DI TUTTI I DATI IN RETE
+        SE NE LEGGO DI MENO CONITNUO A LEGGERE ESCLUDENDO I VARI CASI
+    */
+    size_t left = n;
+    char *p = (char *)buf;
+
+    while(left >0){
+        int r = recv(fd, p, left);
+        if(r<0){
+            if(r == SOCKET_ERROR) return -1; // errore nel socket non dovuto da segnalazione
+            return -1;
+        }
+        if (r == 0) return (ssize_t)(n - left); // il client ha chiuso la connessione, analogo chiusura PIPE
+        left -= (size_t)r;
+        p += r;
+    }
+    return (ssize_t)n; // se arrivo qui ho letto tutti i byte richiesti e comunico con n
+}
+
+ssize_t writen(SOCKET fd, const void *buff, size_t n){
+    /*
+        QUESTA FUNZIONE SERVE PER IL CONTROLLO
+        DELL'AVVENUTA SCRITTURA DI TUTTI I DATI IN RETE
+        SE NE SCRIVO DI MENO CONITNUO A SCRIVERE ESCLUDENDO I VARI CASI
+    */
+    size_t left = n;
+    const char *p = (const char *)buff;
+    while(left > 0){ // > e non < perchè è unisgned e non può essere negativo
+        int w = write(fd, p, left);
+        if(w<0){
+            if(w == SOCKET_ERROR) return -1; // errore nel socket non dovuto da segnalazione
+            return -1;
+        } if(w == 0) return (ssize_t)(n - left); // il client ha chiuso la connessione, analogo chiusura PIPE
+        left -= (size_t)w;
+        p += w;
+    }
+    return (ssize_t)n; // se arrivo qui ho scritto tutti i byte richiesti e comunico con n
+}
+#endif
+
+#ifdef _WIN32
+int send_msg(SOCKET fd, azioni *msg){
+#else
 int send_msg(int fd, azioni *msg){
+#endif
     azioni packet;
 	memset(&packet, 0, sizeof(packet));
 
@@ -86,7 +136,11 @@ int send_msg(int fd, azioni *msg){
     return 0;
 }
 
+#ifdef _WIN32
+int recv_msg(SOCKET fd, azioni *msg){
+#else
 int recv_msg(int fd, azioni *msg){
+#endif
     azioni packet;
 
     ssize_t n = readn(fd, &packet, sizeof(azioni));
