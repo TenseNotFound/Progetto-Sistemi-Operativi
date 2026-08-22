@@ -237,18 +237,20 @@ void selezione_prossima_mossa( uint8_t *target, uint8_t *x_out, uint8_t *y_out){
                                 direzione_colpi = i;
                                 return;}
                         }
-                }
+                inseguimento = false;
+                ricerca(x_out,y_out);}
         else {
                 x = ultimo_colpo_x + delta_riga[direzione_colpi];
                 y = ultimo_colpo_y + delta_colonna[direzione_colpi];
-                if (cella_papabile(x,y) && !riprovato_verso_opposto){
+                if (!cella_papabile(x,y) && !riprovato_verso_opposto){
                         if(direzione_colpi%2 == 0) { direzione_colpi += 1;} /* serve ad invertire la direzione con cui il bot spara */
                         else { direzione_colpi -= 1;}
                         x = ultimo_colpo_x + delta_riga[direzione_colpi];
                         y = ultimo_colpo_y + delta_colonna[direzione_colpi];
+                        if(!cella_papabile(x,y)) ricerca(x_out,y_out);
                         riprovato_verso_opposto = true;
                         }
-                else if (cella_papabile(x,y) && riprovato_verso_opposto) {
+                else if (!cella_papabile(x,y) && riprovato_verso_opposto) {
                         riprovato_verso_opposto = false;
                         ricerca(x_out,y_out);
                         }
