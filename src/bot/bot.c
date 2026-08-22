@@ -39,6 +39,7 @@ bool tentativi[GRID_SIZE][GRID_SIZE] = {false};
 bool inseguimento = false;
 int colpo_iniziale_x, colpo_iniziale_y; /* primo HIT ad aprire un inseguimento di una nave da affondare */
 int direzione_colpi = -1;
+int direzione_tentata = -1;
 int ultimo_colpo_x, ultimo_colpo_y; /* ultima cella colpita con successo durante un inseguimento */
 bool riprovato_verso_opposto; /* per sapere se, dopo un MISS in un verso, è già stato provato il verso opposto */
 int port, avversario_id = -1;
@@ -161,9 +162,30 @@ int main(int argc, char **argv) {
 
                         case HIT:
                         case MISS:
-                                /*
-                                        va messo inseguimento qua
-                                */
+                                if (pck.player_id == mio_id) {
+                                        tentativi[pck.x][pck.y] = true;
+
+                                        if (pck.type == HIT) {
+                                                if (!inseguimento) {
+                                                  inseguimento = true;
+                                                  colpo_iniziale_x = pck.x;
+                                                  colpo_iniziale_y = pck.y;
+                                                  ultimo_colpo_x = pck.x;
+                                                  ultimo_colpo_y = pck.y;
+                                                  direzione_colpi = -1;
+                                                  direzione_tentata = -1;
+                                                  riprovato_verso_opposto = false;
+                                                } else if (direzione_colpi == -1) {
+                                                  direzione_colpi = direzione_tentata;
+                                                  direzione_tentata = -1;
+                                                  ultimo_colpo_x = pck.x;
+                                                  ultimo_colpo_y = pck.y;
+                                                } else {
+                                                  ultimo_colpo_x = pck.x;
+                                                  ultimo_colpo_y = pck.y;
+                                                 }
+                                        }
+                                }
                                break;
                         case ELIMINATED:
                                 if(pck.target_id == mio_id){
@@ -227,14 +249,15 @@ void selezione_prossima_mossa( uint8_t *target, uint8_t *x_out, uint8_t *y_out){
         int delta_colonna[4] = {-1,1,0,0};
         int x,y;
         if(inseguimento == false) ricerca(x_out, y_out);
-        else if(inseguimento == true && direzione_colpi == -1){
+        else if(inseguimento == true && direzione_tentata == -1){
                 for ( int i = 0;i<4;i++){
                         x = colpo_iniziale_x + delta_riga[i];
                         y = colpo_iniziale_y + delta_colonna[i];
                         if (cella_papabile(x,y)){
+                                tentativi[x][y] = true;
                                 *x_out = x;
                                 *y_out = y;
-                                direzione_colpi = i;
+                                direzione_tentata = i;
                                 return;}
                         }
                 inseguimento = false;
@@ -249,12 +272,14 @@ void selezione_prossima_mossa( uint8_t *target, uint8_t *x_out, uint8_t *y_out){
                         y = ultimo_colpo_y + delta_colonna[direzione_colpi];
                         if(!cella_papabile(x,y)) ricerca(x_out,y_out);
                         riprovato_verso_opposto = true;
+                        tentativi[x][y] = true;
                         }
                 else if (!cella_papabile(x,y) && riprovato_verso_opposto) {
                         riprovato_verso_opposto = false;
                         ricerca(x_out,y_out);
                         }
                 else {
+                        tentativi[x][y] = true;
                         *x_out = x;
                         *y_out = y;
                         return;
@@ -286,7 +311,7 @@ void ricerca(uint8_t *x_out, uint8_t *y_out) {
 bool cella_papabile(int x,int y) {
         if ( x >= GRID_SIZE || x < 0 || y >= GRID_SIZE || y < 0 )  return false;
         else if ( tentativi[x][y] == true)  return false;
-        else  return true;
+        else return true;
 }
 
 int piazzamento_navi (int socket) {
