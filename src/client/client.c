@@ -9,17 +9,17 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
-#include <pthread.h>
 #include <sys/types.h>
-#include <sys/ipc.h>
 #include <sys/mman.h>
-#include <sys/sem.h>
-#include <semaphore.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+
+#ifdef _WIN32
+	#include <windows.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +29,16 @@
 
 volatile sig_atomic_t shutdown_flag = 0;
 
-void gestore(int sig);
+
+
+#ifdef _WIN32
+	BOOL WINAPI ctrl_handler(DWORD ctrl_type);
+	static void chiudi_socket(SOCKET fd); // centralizzo la chiusura del socket e mi semplifica anche il passaggio a WINAPI
+										  // standard WINAPI
+#else
+	void gestore(int sig);
+	static void chiudi_socket(int fd); // centralizzo la chiusura del socket e mi semplifica anche il passaggio a WINAPI
+#endif
 int discovery_server(char *ip, int *port); // serve qualora non passo argomenti in esecuzione o qualora il server non sia raggiungibile con i parametri specificati
 int connetti(char *ip, int porta, struct sockaddr_in *server_addr);
 int piazzamento_navi (int socket);
@@ -39,8 +48,36 @@ bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazi
 
 int port;
 
+#ifdef _WIN32
+	SOCKET socketfd = INVALID_SOCKET;
+#else
+	int socketfd = -1;
+#endif
+
 
 int main(int argc, char **argv) {
+
+#ifdef _WIN32
+	WSADATA wsa;
+
+	bool aperto = false;
+	if(WSAStartup(&wsa, &ready) != 0){
+		perror("Errore nello startup del socket (WINAPI)");
+		return -1;
+	}
+
+	aperto = true;
+	HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
+	DWORD console_mode = 0;
+	if(hout != INVALID_HANDLE_VALUE && GetConsoleMode(&hout, &console_mode)) SetConsoleMode(&hout, console_mode|ENABLE_VIRTUAL_TERMINA_PROCESSING);
+
+	if(!SetConsoleCtrlHandler(ctrl_handler, TRUE)){
+		perror("Errore nell'installazione del gestore per il Ctrl+C (WINAPI)");
+		WSACleanup();
+		return -1;
+	}
+
+#endif
 
 	char ip_buf[16] = {0};
 	port = 0;
@@ -65,7 +102,7 @@ int main(int argc, char **argv) {
 		}
 		strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
 	}
-
+#ifndef __WIN32
 	struct sigaction sa;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_handler = gestore;
@@ -81,13 +118,13 @@ int main(int argc, char **argv) {
 		perror("Errore nell'installazione della sigaction per la sigpipe");
 		goto chiusura;
 	}
-
+#endif
 	gui_init(auto_mode);
 
 	struct sockaddr_in server_addr;
 	memset(&server_addr, 0,sizeof(server_addr));
 	
-	int socketfd = -1, mio_id = -1;
+	int mio_id = -1;
 
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
@@ -262,7 +299,14 @@ chiusura:
 		fflush(stdout);
 	}
 
-	if(socketfd >= 0) close(socketfd);
+	if(socketfd != -1){
+		chiudi_socket(socketfd);
+		socketfd = -1;
+	}
+#ifdef _WINAPI
+	if(aperto) WSACleanup();
+#endif
+
 	close_game();
 	
 
@@ -274,25 +318,36 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
 	server_addr->sin_family = AF_INET;
 	server_addr->sin_port = htons(porta);
 
+#ifdef _WIN32
+	if (inet_pton(ip, &server_addr->sin_addr) == 0) {
+        printf("indirizzo ip non valido: %s\n", ip);
+        return -1;
+    }
+#else
 	if (inet_aton(ip, &server_addr->sin_addr) == 0) {
         printf("indirizzo ip non valido: %s\n", ip);
         return -1;
     }
+#endif
+	
+#ifdef _WIN32
+	SOCKET sfd = socket(AF_INET, SOCK_STREAM, 0);
+#else
+	int sfd = socket(AF_INET, SOCK_STREAM, 0);
+#endif
 
-	int socketfd = socket(AF_INET, SOCK_STREAM, 0);
-
-	if(socketfd == -1){
+	if(sfd == -1){
 		perror("Errore nell'apertura del socket di connessione");
 		return -1;
 	}
 
-	if(connect(socketfd, (struct sockaddr *)server_addr, sizeof(struct sockaddr_in)) == -1){
+	if(connect(sfd, (struct sockaddr *)server_addr, sizeof(struct sockaddr_in)) == -1){
 		perror("Errore nella connessione al server");
-		close(socketfd);
+		chiudi_socket(sfd);
 		return -1;
 	}
 
-	return socketfd;
+	return sfd;
 }
 
 int getUsername(char *buf, size_t len){
@@ -400,7 +455,7 @@ int piazzamento_navi (int socket) {
 	draw_grids();
 
 	if(invio_navi(socket, posizioni_navi) == -1){
-		perror("errore nell'invio delle posizioni delle navi");
+		printf(stderr, "errore nell'invio delle posizioni delle navi");
 		return -1;
 	}
 
@@ -415,7 +470,7 @@ int invio_navi(int socket, posizionamento *navi){
 		p.x = navi[i].x; // endianess safe -> mando 1 byte solo e non 4
 		p.y = navi[i].y;
 		p.orientation = navi[i].orientation;
-		if(writen(socket, &p, sizeof(posizionamento)) != sizeof(posizionamento)){
+		if(writen(socket, &p, sizeof(posizionamento)) != sizeof(posizionamento)){ // cambia qua per WIN --FIX
 			return -1;
 		}
 	}
@@ -424,27 +479,40 @@ int invio_navi(int socket, posizionamento *navi){
 
 int discovery_server(char *ip, int *port){
 
+#ifdef _WIN32
+	SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+#else
 	int sock = socket(AF_INET, SOCK_DGRAM, 0);
+#endif
+	
 	if(sock == -1){
 		perror("Errore nell'apertura del socket per l'UDP");
 		return -1;
 	}
 
 	int abilitata = 1;
-	if(setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &abilitata, sizeof(abilitata))<0){
+	if(setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&abilitata, sizeof(abilitata))<0){
 		perror("Errore nell'abilitare la modalità broadcast sul socket di discovery");
-		close(sock);
+		chiudi_socket(sock);
 		return -1;
 	}
-
+#ifdef _WIN32
+	DWORD timeout_sock = 2000; // portare in protocollo e fixare 
+	if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_sock, sizeof(timeout_sock)) < 0) {
+        perror("errore nel setup del timer in setsockopt");
+        chiudi_socket(sock);
+        return -1;
+    }
+#else
 	struct timeval time; // dal man di setsockopt
     time.tv_sec = 2; 
     time.tv_usec = 0;
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &time, sizeof(time)) < 0) {
         perror("errore nel setup del timer in setsockopt");
-        close(sock);
+        chiudi_socket(sock);
         return -1;
     }
+#endif
 
 	struct sockaddr_in broadcast;
 	memset(&broadcast, 0, sizeof(broadcast));
@@ -464,8 +532,8 @@ int discovery_server(char *ip, int *port){
 	for(int i = 0; i<TENTATIVI; i++){
 
 		if(sendto(sock, DISCOVER, strlen(DISCOVER), 0, (struct sockaddr *)&broadcast, sizeof(broadcast))<0){
-			perror("Errore nell'inviare il payload di discovery");
-			close(sock);
+			printf(stderr, "Errore nell'inviare il payload di discovery");
+			chiudi_socket(sock);
 			return -1;
 		}
 
@@ -481,7 +549,7 @@ int discovery_server(char *ip, int *port){
 
                 printf("[*] Server trovato con successo!\n[*] In ascolto su %s:%d\n", ip, *port);
 				fflush(stdout);
-                close(sock);
+                chiudi_socket(sock);
                 return 0;
             }
         }
@@ -492,7 +560,7 @@ int discovery_server(char *ip, int *port){
 	}
 
 	printf("[*] Nessun server trovato nella rete dopo %d tentativi.\n", TENTATIVI);
-    close(sock);
+    chiudi_socket(sock);
     return -1;	
 
 }
@@ -526,7 +594,30 @@ bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazi
 	return true;
 }
 
+
+#ifdef _WIN32
+static void chiudi_socket(SOCKET fd){
+
+	closesocket((SOCKET)fd);
+
+}
+
+BOOL WINAPI ctrl_handler(DWORD sig){
+	if(sig == CTRL_C_EVENT || sig == CTRL_BREAK_EVENT || sig == CTRL_CLOSE_EVENT){
+		shutdown_flag = 1;
+		if(socketfd >= 0) chiudi_socket(socketfd);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+#else
+static void chiudi_socket(int fd){
+	close(fd);
+}
+
 void gestore(int sig){
 	//(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
 	shutdown_flag = 1;
 }
+#endif

@@ -13,6 +13,17 @@
 #include <sys/types.h>
 #include <string.h>
 
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip>
+#else
+    #include <sys/socket>
+    #include <netinet/in.h>
+    #include <netdb.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+#endif
+
 extern volatile sig_atomic_t shutdown_flag; // mi serve perchè sia client.c che server.c usano un procedimento di sblocco da queste funzioni basato su shutdown_flag impostato dal gestore ad 1
                                             // extern perchè definita in client.c e server.c
 
