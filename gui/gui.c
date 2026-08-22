@@ -128,7 +128,7 @@ void draw_grids(){
     if(targetId == 0) {
         printf(GIALLO"[!] Nessun nemico ancora selezionato\n"RESET);
     } else {
-        printf("[*] Radar del player id:%d\n");
+        printf("[*] Radar del player id:%d\n", targetId);
         draw_board(target_grids[targetId]);
     }
 }
@@ -249,8 +249,13 @@ void ricezione_mossa(azioni *mossa) {
     while (!mossa_valida) {
         
         printf("\nInserisci l'ID del giocatore da colpire: ");
-        if( (letti = scanf("%d", &bersaglio)) == EOF) close_game();
+        if((letti = scanf("%d", &bersaglio)) == EOF) close_game();
         if(letti != 1 || bersaglio < 1 || bersaglio > MAX_PLAYER) {
+            if(bersaglio == mossa->player_id){
+                printf(GIALLO"[!] Non puoi fare fuoco a te stesso!\n"RESET);
+                fflush_stdin();
+                continue;
+            }
             printf(GIALLO"[!] Inserisci un id valido\n"RESET);
             fflush_stdin(); 
             continue;

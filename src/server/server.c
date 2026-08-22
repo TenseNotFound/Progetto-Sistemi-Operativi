@@ -686,8 +686,9 @@ gback:
         pthread_mutex_lock(&stato.lock);
         player *bersaglio = trova_giocatore(mossa.target_id, false);
         
-        
-        if(bersaglio == NULL || !bersaglio->alive || mossa.x < 0 || mossa.y < 0 || mossa.x >= GRID_SIZE || mossa.y >= GRID_SIZE){
+        // poichè uint8_t è unsigned, se passo un valore negativo ottengo sicuramente un valore ≥ a GRID_SIZE quindi il controllo sul negativo
+        // è superfluo
+        if(bersaglio == NULL || !bersaglio->alive || mossa.x >= GRID_SIZE || mossa.y >= GRID_SIZE || mossa.target_id == id){
             printf("Bersaglio specificato o coordinate ricevute non valide\n");
             fflush(stdout);
             esito.type = MISS;
