@@ -36,8 +36,8 @@ Attenzione: qualora si digiti il comando per la compilazione del server, in auto
 Il client si divide in due release: una per ambienti POSIX, una per ambienti WINAPI. Per poter compilare si deve digitare:
 
 ```makefile
-make client      # permette la compilazione dell'eseguibile del client (POSIX)
-make wiclient    # permette la compilazione dell'eseguibile del client (WINAPI)
+    make client      # permette la compilazione dell'eseguibile del client (POSIX)
+    make wiclient    # permette la compilazione dell'eseguibile del client (WINAPI)
 ```
 
 ## Bot (Modalità extra)
@@ -47,7 +47,7 @@ Durante la realizzazione del codice, abbiamo pensato che fosse interessante chie
 Per poter compilare il Bot digitare:
 
 ```makefile
-make bot        #permette la compilazione dell'eseguibile del bot
+    make bot        #permette la compilazione dell'eseguibile del bot
 ```
 
 ### Voci extra
@@ -55,8 +55,8 @@ make bot        #permette la compilazione dell'eseguibile del bot
 Nel Makefile sono presenti istruzioni per la pulizia dell'ambiente e un helper per le informazioni di compilazione:
 
 ```makefile
-make clean      # permette la pulizia degli eseguibili
-make help       # permete di visualizzare le istruzioni di compilazione
+    make clean      # permette la pulizia degli eseguibili
+    make help       # permete di visualizzare le istruzioni di compilazione
 ```
 
 ## Documentazione
