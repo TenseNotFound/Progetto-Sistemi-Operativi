@@ -1,5 +1,5 @@
 /*
-        CLIENT POSIX RELEASE
+        CLIENT POSIX/WINAPI RELEASE
 */
 
 #include "../../protocollo/protocollo.h"
@@ -10,10 +10,10 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/types.h>
-#include <sys/mman.h>
 #include <fcntl.h>
 
 #ifndef _WIN32
+	#include <sys/mman.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
 	#include <netdb.h>

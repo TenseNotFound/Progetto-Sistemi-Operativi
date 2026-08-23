@@ -29,7 +29,7 @@ extern volatile sig_atomic_t shutdown_flag; // mi serve perchè sia client.c che
 #ifdef _WIN32
     int recv_msg(SOCKET fd, azioni *msg); // IDENTICA -> serve per la ricezione di messaggi 
     int send_msg(SOCKET fd, azioni *msg); // IDENTICA -> serve per la spedizione di messaggi
-    SSIZE_T readn(SOCKET fd, const void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete		IDENTICA
+    SSIZE_T readn(SOCKET fd, void *buf, size_t n); // serve per controllare l'avvenuta lettura di tutti i dati in rete		IDENTICA
     SSIZE_T writen(SOCKET fd, const void *buf, size_t n); // serve per controllare l'avvenuta scrittura di tutti i dati in rete 	IDENTICA
 #else
     int recv_msg(int fd, azioni *msg); // IDENTICA -> serve per la ricezione di messaggi 

@@ -26,7 +26,8 @@ typedef enum mode {
     MODE_1V1
 } mode;
 
-
+// serve per la compattazione dei dati che trasmetto in rete -> riduzione di payload -> meno overhead complessivo
+#pragma pack(push, 1)
 typedef struct azioni{ // mi definisce la mossa
     game_info type; // specifico il tipo di azione
     uint8_t player_id;
@@ -41,6 +42,7 @@ typedef struct posizionamento{ // mi definisce la nave
     uint8_t x,y; //coordinate nave 
     char orientation; //orientamento della nave (N,S,E,O)
 }posizionamento;
+#pragma pack(pop)
 
 typedef struct navi{
     const char *name;

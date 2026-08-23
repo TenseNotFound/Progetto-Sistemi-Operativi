@@ -50,10 +50,6 @@ int main(int argc, char **argv) {
         int  socketfd = -1;
         srand(time(NULL));
 
-        if(argc <3){
-                printf("Sintassi corretta: %s <IP> <port>\n", argv[0]);
-                goto chiusura;
-        }
         strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
         port = atoi(argv[2]);
 
@@ -168,6 +164,8 @@ int main(int argc, char **argv) {
                                         if (pck.type == HIT) {
                                                 if (!inseguimento) {
                                                   inseguimento = true;
+                                                  direzione_colpi = -1;
+                                                  direzione_tentata = -1;
                                                   colpo_iniziale_x = pck.x;
                                                   colpo_iniziale_y = pck.y;
                                                   ultimo_colpo_x = pck.x;
@@ -219,10 +217,7 @@ int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
         server_addr->sin_family = AF_INET;
         server_addr->sin_port = htons(porta);
 
-        if (inet_aton(ip, &server_addr->sin_addr) == 0) {
-                printf("indirizzo ip non valido: %s\n", ip);
-                return -1;
-        }
+        inet_aton(ip, &server_addr->sin_addr);
 
         int socketfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -246,7 +241,7 @@ void selezione_prossima_mossa( uint8_t *target, uint8_t *x_out, uint8_t *y_out){
         int delta_colonna[4] = {-1,1,0,0};
         int x,y;
         if(inseguimento == false) ricerca(x_out, y_out);
-        else if(inseguimento == true && direzione_tentata == -1){
+        else if(direzione_colpi == -1){
                 for ( int i = 0;i<4;i++){
                         x = colpo_iniziale_x + delta_riga[i];
                         y = colpo_iniziale_y + delta_colonna[i];
@@ -255,8 +250,9 @@ void selezione_prossima_mossa( uint8_t *target, uint8_t *x_out, uint8_t *y_out){
                                 *x_out = x;
                                 *y_out = y;
                                 direzione_tentata = i;
-                                return;}
+                                return;
                         }
+                }
                 inseguimento = false;
                 ricerca(x_out,y_out);}
         else {

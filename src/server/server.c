@@ -421,7 +421,7 @@ try:
             printf("[!] Impossibile trovare un giocatore disponibile per lo startup\n");
             fflush(stdout);
             goto exit;
-        } else sem.sem_num = primo;
+        } else startup.sem_num = primo;
 
 start:
         if((ret = semop(sem1, &startup, 1)) == -1 && errno != EINTR){
