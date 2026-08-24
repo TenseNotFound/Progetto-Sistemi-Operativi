@@ -395,7 +395,7 @@ int main(int argc, char **argv){
 try:
         if ((ret =semop(sem2, &sem, 1)) == -1 && errno != EINTR){
             perror("Errore nella semop");
-            goto exit;
+            if (shutdown_flag) goto exit;
         } else if (ret == -1) goto try;
         
 
@@ -595,7 +595,7 @@ post:
 gback:
         if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){  
             perror("Errore nel prendere il gettone");
-            goto exit;
+            if(shutdown_flag) goto exit;
         } else if(ret == -1) goto gback;
 
         pthread_mutex_lock(&stato.lock);
