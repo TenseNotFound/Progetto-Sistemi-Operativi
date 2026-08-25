@@ -395,8 +395,11 @@ int main(int argc, char **argv){
 try:
         if ((ret =semop(sem2, &sem, 1)) == -1 && errno != EINTR){
             perror("Errore nella semop");
+            goto exit;
+        } else if (ret == -1) {
             if (shutdown_flag) goto exit;
-        } else if (ret == -1) goto try;
+            goto try;
+        }
         
 
         printf("[*] Startup della partita\n");
@@ -427,7 +430,10 @@ start:
         if((ret = semop(sem1, &startup, 1)) == -1 && errno != EINTR){
             perror("Errore nell'avviare i player");
             goto exit;
-        } else if (ret == -1) goto start;
+        } else if (ret == -1) {
+            if(shutdown_flag) goto exit;
+            goto start;
+        }
 
     }
 
@@ -488,6 +494,7 @@ void *client_thread(void *args){
     client_arg *cargs = (client_arg *)args;
     player *me = NULL;
     int fd = cargs->client_fd;
+    int ret;
 
     //recupero ip e porta del client collegato
     char ip[16];
@@ -561,30 +568,38 @@ void *client_thread(void *args){
     printf("[*] In attesa della formazione da %s:%d (ID: %d)", ip, portc, me->id);
     fflush(stdout);
 
-    if(ricezione_navi(fd, me) != 0){
-        printf("Formazione ricevuta non valida");
-        //manda un messaggio di notifica al client
-        goto exit;
-    }
-
-    printf("[*] Formazione ricevuta correttamente (%s)!\n", me->username);
-    fflush(stdout);
-
     struct sembuf ready;
     ready.sem_flg = 0;
     ready.sem_num = 0;
     ready.sem_op = 1;
 
-    int ret;
+    if(ricezione_navi(fd, me) != 0){
+        printf("Formazione ricevuta non valida");
+        pthread_mutex_lock(&stato.lock);
+        me->alive = 0;
+        pthread_mutex_unlock(&stato.lock);
+        goto post;
+    }
+
+    printf("[*] Formazione ricevuta correttamente (%s)!\n", me->username);
+    fflush(stdout);
+
     bool fine_partita;
 
 post:
     if((ret = semop(sem2, &ready, 1)) == -1 && errno != EINTR){
         perror("Impossibile segnalare l'avvenuta ricezione in sem2");
         goto exit;
-    } else if(ret == -1) goto post;
+    } else if(ret == -1) {
+        if(shutdown_flag) goto exit;
+        goto post;
+    }
 
-    
+    pthread_mutex_lock(&stato.lock);
+    bool vivo = me->alive;
+    pthread_mutex_unlock(&stato.lock);
+
+    if(!vivo) goto exit; // esco se sono stato marcato morto causa (almeno qui) formazione invalida
     while(1){
         struct sembuf sem;
         sem.sem_flg = 0;
@@ -596,7 +611,10 @@ gback:
         if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){  
             perror("Errore nel prendere il gettone");
             if(shutdown_flag) goto exit;
-        } else if(ret == -1) goto gback;
+        } else if(ret == -1){
+            if(shutdown_flag) goto exit;
+            goto gback;
+            }
 
         pthread_mutex_lock(&stato.lock);
         fine_partita = stato.fine;
@@ -792,7 +810,10 @@ wake:
                 if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){
                     perror("Errore nel risvegliare tutti i thread per fine partita");
                     goto exit;
-                } else if (ret == -1) goto wake;
+                } else if (ret == -1) {
+                    if(shutdown_flag) goto exit;
+                    goto wake;
+                }
             }
 
             goto exit;
@@ -805,7 +826,10 @@ pass:
         if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){
             perror("Errore nel rilasciare il gettone del semaforo al prossimo player");
             goto exit;
-        } else if(ret == -1) goto pass;
+        } else if(ret == -1) {
+            if(shutdown_flag) goto exit;
+            goto pass;
+        }
 
         pthread_mutex_lock(&stato.lock);
         alive = me->alive;

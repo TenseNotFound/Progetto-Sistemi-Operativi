@@ -50,6 +50,11 @@ void draw_grids();
 void clean_screen();
 void close_game();
 void welcomeback(char *buff);
+void invalid_input(void);
+void posizionamento_ok(const char *nave, int x, int y, char orientazione);
+void chiusura_forzata(void);
+void waiting_player(void);
+void connection_lost_fallback(const char *ip_buf, int port);
 
 void fflush_stdin(void); // serve per pulire il buffer di input, così da evitare che rimangano caratteri in stdin, visto che fflush(stdin) non esiste, lo creo io
 

@@ -77,7 +77,8 @@ void init_target_board(uint8_t id){
 }
 
 void draw_board(char griglia[GRID_SIZE][GRID_SIZE]) {
-
+    printf(VERDE"\n---LA TUA FLOTTA---\n"RESET);
+    fflush(stdout);
     char buffer[BOARD_BUFFER_SIZE];
     size_t offset = 0;
     int scritto = 0;
@@ -359,4 +360,28 @@ void fflush_stdin(void){
 void welcomeback(char *buff){
     printf(VERDE"[*] Bentornato %s! \n"RESET, buff);
     fflush(stdout);
+}
+
+void invalid_input(void){
+    printf(ROSSO"[!] Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"RESET); 
+}
+
+void posizionamento_ok(const char *nave, int x, int y, char orientazione){
+    printf(VERDE"[*] Nave %s posizionata in (%d,%d) con orientamento %c\n"RESET, nave, x, y, orientazione);
+    fflush(stdout);
+}
+
+void chiusura_forzata(void){
+    printf(ROSSO"\n [!] Chiusura forzata del client, inizio routine di shutdown...\n"RESET);
+    fflush(stdout);
+}
+
+void waiting_player(void){
+    printf(GIALLO"\n[*] In attesa che tutti i giocatori siano pronti...\n"RESET);
+    fflush(stdout);
+}
+
+void connection_lost_fallback(char *ip_buf, int port){
+    printf(GIALLO"[*] Connessione a %s:%d fallita, provo il discovery automatico...\n"RESET, ip_buf, port);
+	fflush(stdout);
 }

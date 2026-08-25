@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <ctype.h> // semplifica la validazione dell'orientazione quando ricevo la flotta
 #include <fcntl.h>
 
 #ifndef _WIN32
@@ -135,8 +136,7 @@ int main(int argc, char **argv) {
 
 	socketfd = connetti(ip_buf, port, &server_addr);
 	if(socketfd == -1){
-		printf("[*] Connessione a %s:%d fallita, provo il discovery automatico...\n", ip_buf, port);
-		fflush(stdout);
+		connection_lost_fallback(ip_buf, port);
 		if(discovery_server(ip_buf, &port) == -1){
 			printf("Errore: impossibile trovare un server\n");
 			goto chiusura;
@@ -198,8 +198,7 @@ int main(int argc, char **argv) {
 		goto chiusura;
 	}
 
-	printf("\n[*] In attesa che tutti i giocatori siano pronti...\n");
-    fflush(stdout);
+	waiting_player();
 
 	azioni pck;
 	bool vivo = true;
@@ -298,7 +297,7 @@ int main(int argc, char **argv) {
 chiusura:
 
 	if(shutdown_flag){
-		printf("\n [!] Chiusura forzata del client, inizio routine di shutdown...\n");
+		chiusura_forzata();
 		fflush(stdout);
 	}
 
@@ -423,15 +422,13 @@ int piazzamento_navi (int socket) {
 	int letti;
 
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
-		draw_grids();
+		draw_board(grid);
 		do {
 			printf("Inserisci le coordinate della nave %s (dimensione %u) e l'orientamento (N,S,E,O):\n", ship_type[i].name, ship_type[i].size);
-			while((letti = scanf("%d %d %c", &x, &y, &orientazione))!= 3 || (orientazione != 'N' && orientazione != 'S' && orientazione != 'E' && orientazione != 'O')){ 
+			while((letti = scanf("%d %d %c", &x, &y, &orientazione))!= 3 || (toupper(orientazione) != 'N' && toupper(orientazione) != "S" && toupper(orientazione) != "E" && toupper(orientazione) != 'O' && toupper(orientazione) != 'W')){ 
 				
 				if(letti == EOF) return -1;
-
-				printf("Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"); 
-				fflush(stdout);
+				invalid_input();
 				fflush_stdin();
 			}
 
@@ -451,12 +448,10 @@ int piazzamento_navi (int socket) {
 		addboat(x - 1 , y - 1, orientazione, ship_type[i].size);
 	
 		clean_screen();
-		printf("Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_type[i].name, x, y, orientazione);
-		
-		fflush(stdout);
+		posizionamento_ok(ship_type[i].name, x, y, orientazione);
 	}
 
-	draw_grids();
+	draw_board(grid);
 
 	if(invio_navi(socket, posizioni_navi) == -1){
 		fprintf(stderr, "errore nell'invio delle posizioni delle navi\n");
@@ -499,7 +494,7 @@ int discovery_server(char *ip, int *port){
 		return -1;
 	}
 #ifdef _WIN32
-	DWORD timeout_sock = TIMEOUT_SOCKET * 1000; // portare in protocollo e fixare 
+	DWORD timeout_sock = TIMEOUT_SOCKET * 1000; 
 	if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_sock, sizeof(timeout_sock)) < 0) {
         fprintf(stderr,"errore nel setup del timer in setsockopt\n");
         chiudi_socket(sock);
