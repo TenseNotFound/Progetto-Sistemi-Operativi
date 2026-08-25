@@ -45,9 +45,9 @@ void gui_init(bool flag){
     fflush(stdout);
 }
 
-void server_connected(char *ip, int port, int id){
-    printf(VERDE"[*] Connessione stabilita con il server %s:%d\n" RESET, ip, port);
-    printf("[*] Il tuo ID è: " VERDE "%d\n" RESET, id);
+void server_connected(char *ip, unsigned int port, int id){
+    printf(VERDE"[*] Connessione stabilita con il server %s:%u\n" RESET, ip, port);
+    printf("[*] Il tuo ID e': " VERDE "%d\n" RESET, id);
     fflush(stdout);
 }
 
@@ -381,7 +381,7 @@ void waiting_player(void){
     fflush(stdout);
 }
 
-void connection_lost_fallback(char *ip_buf, int port){
-    printf(GIALLO"[*] Connessione a %s:%d fallita, provo il discovery automatico...\n"RESET, ip_buf, port);
+void connection_lost_fallback(const char *ip_buf, unsigned int port){
+    printf(GIALLO"[*] Connessione a %s:%u fallita, provo il discovery automatico...\n"RESET, ip_buf, port);
 	fflush(stdout);
 }

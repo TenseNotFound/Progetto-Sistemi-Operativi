@@ -31,7 +31,7 @@ void init_target_board(uint8_t id);
 void draw_board(char grid[GRID_SIZE][GRID_SIZE]);
 void addboat(int x, int y, char orientazione, uint8_t size);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);
-void server_connected(char *ip, int port, int id);
+void server_connected(char *ip, unsigned int port, int id);
 int game_mode();
 void bersagli(uint8_t id, char *username);
 void turno(void);
@@ -54,7 +54,7 @@ void invalid_input(void);
 void posizionamento_ok(const char *nave, int x, int y, char orientazione);
 void chiusura_forzata(void);
 void waiting_player(void);
-void connection_lost_fallback(const char *ip_buf, int port);
+void connection_lost_fallback(const char *ip_buf, unsigned int port);
 
 void fflush_stdin(void); // serve per pulire il buffer di input, così da evitare che rimangano caratteri in stdin, visto che fflush(stdin) non esiste, lo creo io
 

@@ -43,14 +43,14 @@ volatile sig_atomic_t shutdown_flag = 0;
 	void gestore(int sig);
 	static void chiudi_socket(int fd); // centralizzo la chiusura del socket e mi semplifica anche il passaggio a WINAPI
 #endif
-int discovery_server(char *ip, int *port); // serve qualora non passo argomenti in esecuzione o qualora il server non sia raggiungibile con i parametri specificati
-int connetti(char *ip, int porta, struct sockaddr_in *server_addr);
+int discovery_server(char *ip, unsigned int *port); // serve qualora non passo argomenti in esecuzione o qualora il server non sia raggiungibile con i parametri specificati
+int connetti(char *ip, unsigned int porta, struct sockaddr_in *server_addr);
 int piazzamento_navi (int socket);
 int invio_navi(int socket, posizionamento *navi);
 int getUsername(char *buf, size_t len); // per prendere l'username del nuovo giocatore
 bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, uint8_t dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
 
-int port;
+unsigned int port;
 
 #ifdef _WIN32
 	SOCKET socketfd = INVALID_SOCKET;
@@ -99,11 +99,12 @@ int main(int argc, char **argv) {
 		printf("Sintassi corretta: %s <IP> <port>\n", argv[0]);
 		goto chiusura;
 	} else {
-		port = atoi(argv[2]);
-		if(port < 5000 || port >65535){
+		int tport = atoi(argv[2]);
+		if(tport < 5000 || tport >65535){
 			printf("Inserisci un numero di porta valido nel range 5000-65535\n");
 			goto chiusura;
 		}
+		port = (unsigned int)tport;
 		strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
 	}
 #ifndef _WIN32
@@ -315,7 +316,7 @@ chiusura:
 	return 0;
 }
 
-int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
+int connetti(char *ip, unsigned int porta, struct sockaddr_in *server_addr){
 	memset(server_addr, 0, sizeof(struct sockaddr_in));
 	server_addr->sin_family = AF_INET;
 	server_addr->sin_port = htons(porta);
@@ -474,7 +475,7 @@ int invio_navi(int socket, posizionamento *navi){
 	return 0;
 }
 
-int discovery_server(char *ip, int *port){
+int discovery_server(char *ip, unsigned int *port){
 
 #ifdef _WIN32
 	SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -542,9 +543,9 @@ int discovery_server(char *ip, int *port){
             if (atoi(buffer) > 0) { 
                 strncpy(ip, inet_ntoa(ricezione.sin_addr), 15); // il server manda solo la porta (Payload), il resto è nell'header del pacchetto
                 ip[15] = '\0';
-                *port = atoi(buffer);
+                *port = (unsigned int)atoi(buffer);
 
-                printf("[*] Server trovato con successo!\n[*] In ascolto su %s:%d\n", ip, *port);
+                printf("[*] Server trovato con successo!\n[*] In ascolto su %s:%u\n", ip, *port);
 				fflush(stdout);
                 chiudi_socket(sock);
                 return 0;
