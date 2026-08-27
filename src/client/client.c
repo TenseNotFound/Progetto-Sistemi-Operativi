@@ -203,9 +203,10 @@ int main(int argc, char **argv) {
 
 	azioni pck;
 	bool vivo = true;
+	bool fine = false;
 	char esito;
 
-	while(vivo && !shutdown_flag){
+	while(!fine && !shutdown_flag){
 		memset(&pck, 0, sizeof(pck));
 		if(recv_msg(socketfd, &pck) == -1){
 			if(!shutdown_flag) connection_lost(); // mi serve in quanto può dare -1 anche per ctrl+c
@@ -218,7 +219,7 @@ int main(int argc, char **argv) {
                 break;
 
 			case TURN:
-				if(pck.player_id == mio_id){
+				if(pck.player_id == mio_id && vivo){
 					turno();
 
 					azioni mossa;
@@ -275,6 +276,7 @@ int main(int argc, char **argv) {
 			
 			case ELIMINATED:
 				if(pck.target_id == mio_id){
+					vivo = false;
 					s_eliminato();
 				} else {
 					eliminato(pck.target_id);
@@ -287,7 +289,7 @@ int main(int argc, char **argv) {
 				} else {
 					vittoria(pck.player_id);
 				}
-				vivo = false;
+				fine = true;
 				break;
 			default:
 				break;

@@ -329,6 +329,8 @@ void s_eliminato() {
     printf(ROSSO"\n=====================================================\n");
     printf(" [!] SEI STATO ELIMINATO! LA TUA FLOTTA È AFFONDATA [!]\n");
     printf("=======================================================\n"RESET);
+    printf(CIANO"[*] MODALITÀ SPETTATORE ATTIVA\n"RESET);
+    printf(CIANO"[*] Sei ora uno spettatore\n"RESET);
     printf(GIALLO"[*] Rimani in attesa per guardare il resto della partita.\n"RESET);
     fflush(stdout);
 }
