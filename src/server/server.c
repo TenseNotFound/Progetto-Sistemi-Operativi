@@ -318,7 +318,7 @@ int main(int argc, char **argv){
         if(pid == 0){
             char porta[10];
             snprintf(porta, sizeof(porta), "%u", port);
-            execl(".././bot", "bot", "127.0.0.1", porta, NULL);
+            execl("./bot", "bot", "127.0.0.1", porta, NULL);
             perror("Errore nello startup del bot");
             exit(1);
 

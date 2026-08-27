@@ -26,7 +26,7 @@ typedef enum mode {
     MODE_1V1
 } mode;
 
-// serve per la compattazione dei dati che trasmetto in rete -> riduzione di payload -> meno overhead complessivo
+// serve per la compattazione dei dati che trasmetto in rete -> riduzione di payload -> meno overhead complessivo -> portabilità tra piattaforme
 #pragma pack(push, 1)
 typedef struct azioni{ // mi definisce la mossa
     game_info type; // specifico il tipo di azione

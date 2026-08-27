@@ -81,6 +81,22 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
+#else
+	struct sigaction sa;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_handler = gestore;
+	sa.sa_flags = 0;
+
+	if(sigaction(SIGINT, &sa, NULL) == -1 || sigaction(SIGTERM, &sa, NULL) == -1){
+		fprintf(stderr, "Errore nell'installazione della sigaction\n");
+		goto chiusura;
+	}
+
+	sa.sa_handler = SIG_IGN;
+	if(sigaction(SIGPIPE, &sa, NULL) == -1){
+		fprintf(stderr, "Errore nell'installazione della sigaction per la sigpipe\n");
+		goto chiusura;
+	}
 #endif
 
 	char ip_buf[16] = {0};
@@ -107,23 +123,7 @@ int main(int argc, char **argv) {
 		port = (unsigned int)tport;
 		strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
 	}
-#ifndef _WIN32
-	struct sigaction sa;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_handler = gestore;
-	sa.sa_flags = 0;
 
-	if(sigaction(SIGINT, &sa, NULL) == -1 || sigaction(SIGTERM, &sa, NULL) == -1){
-		fprintf(stderr, "Errore nell'installazione della sigaction\n");
-		goto chiusura;
-	}
-
-	sa.sa_handler = SIG_IGN;
-	if(sigaction(SIGPIPE, &sa, NULL) == -1){
-		fprintf(stderr, "Errore nell'installazione della sigaction per la sigpipe\n");
-		goto chiusura;
-	}
-#endif
 	gui_init(auto_mode);
 
 	struct sockaddr_in server_addr;
@@ -426,17 +426,17 @@ int piazzamento_navi (int socket) {
 		draw_board(grid);
 		do {
 			printf("Inserisci le coordinate della nave %s (dimensione %u) e l'orientamento (N,S,E,O):\n", ship_type[i].name, ship_type[i].size);
-			while((letti = scanf("%d %d %c", &x, &y, &orientazione))!= 3 || (toupper(orientazione) != 'N' && toupper(orientazione) != "S" && toupper(orientazione) != "E" && toupper(orientazione) != 'O' && toupper(orientazione) != 'W')){ 
+			while((letti = scanf("%d %d %c", &x, &y, &orientazione))!= 3 || (toupper(orientazione) != 'N' && toupper(orientazione) != 'S' && toupper(orientazione) != 'E' && toupper(orientazione) != 'O' && toupper(orientazione) != 'W')){ 
 				
 				if(letti == EOF) return -1;
 				invalid_input();
 				fflush_stdin();
 			}
-
+			orientazione = (char)toupper(orientazione);
 			fflush_stdin();
 			valid = validazione(occupata, x - 1, y - 1, orientazione, ship_type[i].size);
 			if (!valid) {
-				printf("Posizionamento non valido: la nave esce dalla griglia o si sovrappone a un'altra nave. Riprova.\n");
+				printf("Posizionamento non valido: la nave esce dalla griglia o si sovrappone con un'altra nave. Riprova.\n");
 				fflush(stdout);
 			}
 		} while (!valid);
@@ -536,7 +536,7 @@ int discovery_server(char *ip, unsigned int *port){
 		}
 
 		n = recvfrom(sock, buffer, sizeof(buffer) -1 , 0, (struct sockaddr *)&ricezione, &ricezione_s);
-
+		if(shutdown_flag) break;
 		if (n > 0) {
             buffer[n] = '\0';
             
@@ -556,8 +556,8 @@ int discovery_server(char *ip, unsigned int *port){
         fflush(stdout);
 
 	}
-
-	printf("[*] Nessun server trovato nella rete dopo %d tentativi.\n", TENTATIVI);
+	if(shutdown_flag) printf(" [*] Ricevuta segnalazione, interrompo \n...");
+	else printf("[*] Nessun server trovato in rete dopo %d tentativi.\n", TENTATIVI);
     chiudi_socket(sock);
     return -1;	
 

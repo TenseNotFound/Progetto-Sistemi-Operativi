@@ -27,7 +27,7 @@
 volatile sig_atomic_t shutdown_flag = 0;
 
 void gestore(int sig);
-int connetti(char *ip, int porta, struct sockaddr_in *server_addr);
+int connetti(char *ip, unsigned int porta, struct sockaddr_in *server_addr);
 int piazzamento_navi (int socket);
 int invio_navi(int socket, posizionamento *navi);
 bool validazione(bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazione, int dimensione_nave ); // valido la formazione (se è nei limiti prima di inviare)
@@ -42,7 +42,8 @@ int direzione_colpi = -1;
 int direzione_tentata = -1;
 int ultimo_colpo_x, ultimo_colpo_y; /* ultima cella colpita con successo durante un inseguimento */
 bool riprovato_verso_opposto = false; /* per sapere se, dopo un MISS in un verso, è già stato provato il verso opposto */
-int port, avversario_id = -1;
+int avversario_id = -1;
+unsigned int port;
 
 int main(int argc, char **argv) {
 
@@ -51,7 +52,7 @@ int main(int argc, char **argv) {
         srand(time(NULL));
 
         strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
-        port = atoi(argv[2]);
+        port = (unsigned int)atoi(argv[2]);
 
         struct sigaction sa;
         sigemptyset(&sa.sa_mask);
@@ -103,7 +104,7 @@ int main(int argc, char **argv) {
 
         // ok handshake, il server mi ha assegnato un id
         mio_id = welcome_msg.player_id;
-        printf("[BOT] Connesso a %s:%d, id %d\n", ip_buf, port, mio_id);
+        printf("[BOT] Connesso a %s:%u, id %d\n", ip_buf, port, mio_id);
         fflush(stdout);
 
         azioni mode_msg;
@@ -186,6 +187,8 @@ int main(int argc, char **argv) {
                                 if(pck.target_id == mio_id){
                                         printf("[BOT] Sono stato eliminato\n");
                                         fflush(stdout);
+                                        // chiudo -> inutile rimenere come spettatore
+                                        vivo = false;
                                 }
                                 break;
 
@@ -212,7 +215,7 @@ chiusura:
         return 0;
 }
 
-int connetti(char *ip, int porta, struct sockaddr_in *server_addr){
+int connetti(char *ip, unsigned int porta, struct sockaddr_in *server_addr){
         memset(server_addr, 0, sizeof(struct sockaddr_in));
         server_addr->sin_family = AF_INET;
         server_addr->sin_port = htons(porta);
@@ -263,11 +266,21 @@ void selezione_prossima_mossa( uint8_t *target, uint8_t *x_out, uint8_t *y_out){
                         else { direzione_colpi -= 1;}
                         x = ultimo_colpo_x + delta_riga[direzione_colpi];
                         y = ultimo_colpo_y + delta_colonna[direzione_colpi];
-                        if(!cella_papabile(x,y)) ricerca(x_out,y_out);
                         riprovato_verso_opposto = true;
+                        
+                        if(!cella_papabile(x,y)){
+                                inseguimento = false;
+                                ricerca(x_out,y_out);
+                                return;
+                        }
+                        
                         tentativi[x][y] = true;
+                        *x_out = x;
+                        *y_out = y;
+                        return;
                         }
                 else if (!cella_papabile(x,y) && riprovato_verso_opposto) {
+                        inseguimento = false;
                         riprovato_verso_opposto = false;
                         ricerca(x_out,y_out);
                         }
@@ -327,8 +340,7 @@ int piazzamento_navi (int socket) {
                 posizioni_navi[i].orientation = orientazione;
 
                 
-                printf("Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_type[i].name, x, y, orientazione);
-
+                printf("[BOT] Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_type[i].name, x, y, orientazione);
                 fflush(stdout);
         }
 
@@ -381,6 +393,5 @@ bool validazione( bool board[GRID_SIZE][GRID_SIZE], int x, int y, char orientazi
 }
 
 void gestore(int sig){
-        //(void)sig; scartsrand(time(NULL));a il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
         shutdown_flag = 1;
 }
