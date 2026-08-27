@@ -318,7 +318,7 @@ int main(int argc, char **argv){
         if(pid == 0){
             char porta[10];
             snprintf(porta, sizeof(porta), "%u", port);
-            execl("./bot", "bot", "127.0.0.1", porta, NULL);
+            execl("./battaglia_bot", "battaglia_bot", "127.0.0.1", porta, NULL);
             perror("Errore nello startup del bot");
             exit(1);
 
@@ -1039,7 +1039,7 @@ int ricezione_navi (int fd, player *me){
     for(int i = 0; i<SHIP_NUMBER; i++){
         posizionamento p; 
         memset(&p, 0, sizeof(p));
-        if(readn(fd, &p, sizeof(p)) != (size_t)sizeof(p)){
+        if(readn(fd, &p, sizeof(p)) != (ssize_t)sizeof(p)){ //readn mi da ssize_t, sizeof mi da size_t: per coerenza sistemo i cast
             perror("Errore nella ricezione della formazione ");
             return -1;
         }

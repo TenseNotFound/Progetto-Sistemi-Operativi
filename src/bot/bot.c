@@ -240,7 +240,7 @@ int connetti(char *ip, unsigned int porta, struct sockaddr_in *server_addr){
 
 void selezione_prossima_mossa( uint8_t *target, uint8_t *x_out, uint8_t *y_out){
         *target = (uint8_t)avversario_id;
-        int delta_riga[4] = {0,0,1,-1}; /* N,S,E,O */
+        int delta_riga[4] = {0,0,1,-1}; /* O,E,S,N */
         int delta_colonna[4] = {-1,1,0,0};
         int x,y;
         if(inseguimento == false) ricerca(x_out, y_out);

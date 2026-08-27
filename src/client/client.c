@@ -360,8 +360,8 @@ int getUsername(char *buf, size_t len){
 	// poichè causa portabilità di open non funziona su WINAPI, uso fopen
 	FILE *fd = fopen("_user", "r");
     if(fd == NULL){
-        fprintf(stderr,"Errore nell'apertura del file di gestione degli utenti\n");
-        
+		if(errno != ENOENT) fprintf(stderr,"Errore nell'apertura del file di gestione degli utenti\n");
+        //se errno == ENOENT vuol dire che è la prima creazione del file
     } else {
 		buf[0] = '\0';
 		if(fgets(buf, len, fd) != NULL){
@@ -397,7 +397,6 @@ int getUsername(char *buf, size_t len){
 				fprintf(stderr,"Errore nell'apertura del file\n");
 				mod_ospite();
 				fprintf(stderr, "Procedo normalmente escludendo la scrittura sul file \n");
-				fflush(stdout);
 				strcpy(buf, temp);
 			} else {
 				strcpy(buf, temp); 

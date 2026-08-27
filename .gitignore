@@ -1,7 +1,7 @@
 battaglia_server
 battaglia_client
 battaglia_client.exe
-bot
+battaglia_bot
 _user
 *.o
 *.out

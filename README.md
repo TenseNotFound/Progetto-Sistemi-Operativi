@@ -29,10 +29,10 @@ make server    # compilazione dell'eseguibile del server
 ```
 Successivamente digitare:
 ```bash
-./battaglia_server
+./battaglia_server <port>   # 5000≤port≤65535
 ```
-
-Attenzione: qualora si digiti il comando per la compilazione del server, in automatico verrà compilato anche il bot, questo perchè come da codice, ci si aspetta di trovare già un eseguibile nel momento del lancio del bot.
+Se la porta inserita non risulta valida oppure occupata, il server procede a sceglierne una in maniera autonoma per poi comunicarla ai vari client con un thread di discovery dedicato.
+**Attenzione**: qualora si digiti il comando per la compilazione del server, in automatico verrà compilato anche il bot, questo perché come da codice, ci si aspetta di trovare già un eseguibile nel momento del lancio del bot.
 
 ### Client
 
@@ -44,29 +44,31 @@ make wclient     # permette la compilazione dell'eseguibile del client (WINAPI)
 ```
 Per poter avviare il client, come per il server digitare:
 ```bash
-./battaglia_client
+./battaglia_client <ip> <port>      # modalità manuale
+./battaglia_client                  # modalità automatica -> server cercato tramite richieste/risposte broadcast
 ```
 Oppure se in ambiente WINAPI digitare:
 ```bash
-./battaglia_client.exe
+./battaglia_client.exe <ip> <port>  # modalità manuale
+./battaglia_client.exe              # modalità automatica -> server cercato tramite richieste/risposte broadcast
 ```
 ## Bot (Modalità extra)
 
-Durante la realizzazione del codice, abbiamo pensato che fosse interessante chiedere all’utente la modalità di gioco, di default è come da specifica, altrimenti si può optare per l’1v1. Il Bot serve proprio a questo, qualora non si colleghi nessun client, (lobby da 1 client) e decide di andare o in 1v1 oppure in default (TcT). Il Bot è pensato per ambiente POSIX in quanto a lanciarlo sarebbe solo il server quindi non avrebbe avuto senso una traduzione in standard WINAPI.
+Durante la realizzazione del codice, abbiamo pensato che fosse interessante chiedere all’utente la modalità di gioco, di default è come da specifica, altrimenti si può optare per l’1v1. Da qui nasce l'idea del Bot: se allo scadere del timeout risulta connesso un solo client, invece di chiudergli la connessione viene avviato un Bot che si comporta a tutti gli effetti come un client connesso; meccanismo di attivazione indipendente dalla modalità di gioco selezionata. Il Bot è pensato per ambiente POSIX in quanto a lanciarlo sarebbe solo il server quindi non avrebbe avuto senso una traduzione in standard WINAPI.
 
 Per poter compilare il Bot digitare:
 
 ```bash
 make bot        #permette la compilazione dell'eseguibile del bot
 ```
-
+**Nota**: l'eseguibile del bot viene già generato quando si compila il server.
 ### Voci extra
 
 Nel Makefile sono presenti istruzioni per la pulizia dell'ambiente e un helper per le informazioni di compilazione:
 
 ```bash
 make clean      # permette la pulizia degli eseguibili
-make help       # permete di visualizzare le istruzioni di compilazione
+make help       # permette di visualizzare le istruzioni di compilazione
 ```
 
 ## Documentazione
