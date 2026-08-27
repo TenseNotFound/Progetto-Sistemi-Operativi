@@ -395,7 +395,8 @@ int getUsername(char *buf, size_t len){
 			FILE *fd = fopen("_user", "w");
 			if(fd == NULL){
 				fprintf(stderr,"Errore nell'apertura del file\n");
-				printf("Procedo normalmente escludendo la scrittura sul file \n");
+				mod_ospite();
+				fprintf(stderr, "Procedo normalmente escludendo la scrittura sul file \n");
 				fflush(stdout);
 				strcpy(buf, temp);
 			} else {

@@ -387,3 +387,8 @@ void connection_lost_fallback(const char *ip_buf, unsigned int port){
     printf(GIALLO"[*] Connessione a %s:%u fallita, provo il discovery automatico...\n"RESET, ip_buf, port);
 	fflush(stdout);
 }
+
+void mod_ospite(void){
+    printf(GIALLO"[!] Modalità ospite attivata\n"RESET);
+    fflush(stdout);
+}

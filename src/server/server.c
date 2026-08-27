@@ -458,7 +458,7 @@ exit:
 
     // devo attendere che tutti i thread terminino
     bool terminati = false;
-    for(int max = 0; max< TIMEUOUT_SHOUTDOWN; max++){
+    for(int max = 0; max< TIMEOUT_SHUTDOWN; max++){
         pthread_mutex_lock(&stato.lock);
         if(stato.active_threads == 0){
             terminati = true;

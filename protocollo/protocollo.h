@@ -7,7 +7,7 @@
 #define BACKLOG 16
 #define MAX_PLAYER 32 // scelta obligata via dimensioni fisse dei semafori, ho bisogno a priori di un semaforo con dim ≥ del numero n di client connessi per 
                       // poter accettare correttamente tutti i nuovi player
-#define TIMEUOUT_SHOUTDOWN 10 // (secondi)
+#define TIMEOUT_SHUTDOWN 10 // (secondi)
 #define TIMEOUT_SOCKET 2 // (secondi) usato dal client in WINAPI per il timer di timeout per la discovery port
 #define AFK_TIMEOUT 180 // (secondi) inattività AFK
 #define TIMEOUT_LOBBY 30
