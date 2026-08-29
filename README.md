@@ -1,4 +1,4 @@
-# Progetto Sistemi operativi
+# Progetto Sistemi operativi AA 2025-2026
 
 #### Partecipanti:
 
@@ -11,6 +11,33 @@
 
 Realizzazione di una versione elettronica del famoso gioco "battaglia navale" con un numero di giocatori arbitrario. In questa versione più processi client (residenti in generale su macchine diverse) sono l'interfaccia tra i giocatori e il server (residente in generale su una macchina separata dai client). Un client, una volta abilitato dal server, accetta come input una mossa, la trasmette al server, e riceve la risposta dal server. In questa versione della battaglia navale una mossa consiste oltre alle due coordinate anche nell'identificativo del giocatore contro cui si vuole far fuoco. Il server a sua volta quando riceve una mossa, comunica ai client se qualcuno è stato colpito se uno dei giocatori è il vincitore (o se è stato eliminato), altrimenti abilita il prossimo client a spedire una mossa. La generazione della posizione delle navi per ogni client è lasciata alla discrezione dello studente.
 
+## *Struttura del progetto* 
+Per rendere più semplice l'archiviazione dei sorgenti, si è optato per la creazione di una directory ad albero. Tutti i sorgenti di server, client e bot sono presenti dentro `/src` nelle rispettive cartelle `/server`, `/client` e `/bot`. Per ridurre la quantità di linee di codice nei sorgenti e per garantire una manutenzione e portabilità migliore, si è deciso di creare file di utility, raccolti nella cartella `/utils`. Per la gestione dell'ambiente grafico è presente una cartella contenente i sorgenti dei codici che si occupano dell'interazione a schermo con l'utente: `/gui`. Nella cartella `/protocollo` vi è appunto il protocollo mentre nella `/documentazione` il PDF del report tecnico del progetto. 
+
+```text
+Progetto-Sistemi-Operativi/
+├── README.md
+├── Makefile
+├── .gitignore
+├── documentazione
+│   └── Documentazione_Progetto-Sistemi-Operativi.pdf
+├── gui
+│   ├── gui.c
+│   └── gui.h
+├── protocollo
+│   ├── protocollo.c
+│   └── protocollo.h
+├── src
+│   ├── bot
+│   │   └── bot.c
+│   ├── client
+│   │   └── client.c
+│   └── server
+│       └── server.c
+└── utils
+    ├── utils.c
+    └── utils.h
+```
 
 ## Compilazione *Istruzioni d'uso*
 
@@ -29,7 +56,7 @@ make server    # compilazione dell'eseguibile del server
 ```
 Successivamente digitare:
 ```bash
-./battaglia_server <port>   # 5000≤port≤65535
+./battaglia_server <port>   # 5000 ≤ port ≤ 65535
 ```
 Se la porta inserita non risulta valida oppure occupata, il server procede a sceglierne una in maniera autonoma per poi comunicarla ai vari client con un thread di discovery dedicato.
 **Attenzione**: qualora si digiti il comando per la compilazione del server, in automatico verrà compilato anche il bot, questo perché come da codice, ci si aspetta di trovare già un eseguibile nel momento del lancio del bot.
@@ -47,11 +74,13 @@ Per poter avviare il client, come per il server digitare:
 ./battaglia_client <ip> <port>      # modalità manuale
 ./battaglia_client                  # modalità automatica -> server cercato tramite richieste/risposte broadcast
 ```
-Oppure se in ambiente WINAPI digitare:
+Se client e server risiedono sulla stessa macchina digitare `127.0.0.1` come ip, altrimenti specificare l'ip della macchina che ospita il server. La modalità automatica è utilizzabile in alternativa **solo** quando le due macchine risiedono sulla stessa rete locale.
+Per avviare il client in ambiente WINAPI digitare:
 ```bash
 ./battaglia_client.exe <ip> <port>  # modalità manuale
 ./battaglia_client.exe              # modalità automatica -> server cercato tramite richieste/risposte broadcast
 ```
+
 ## Bot (Modalità extra)
 
 Durante la realizzazione del codice, abbiamo pensato che fosse interessante chiedere all’utente la modalità di gioco, di default è come da specifica, altrimenti si può optare per l’1v1. Da qui nasce l'idea del Bot: se allo scadere del timeout risulta connesso un solo client, invece di chiudergli la connessione viene avviato un Bot che si comporta a tutti gli effetti come un client connesso; meccanismo di attivazione indipendente dalla modalità di gioco selezionata. Il Bot è pensato per ambiente POSIX in quanto a lanciarlo sarebbe solo il server quindi non avrebbe avuto senso una traduzione in standard WINAPI.
@@ -59,7 +88,7 @@ Durante la realizzazione del codice, abbiamo pensato che fosse interessante chie
 Per poter compilare il Bot digitare:
 
 ```bash
-make bot        #permette la compilazione dell'eseguibile del bot
+make bot        # permette la compilazione dell'eseguibile del bot
 ```
 **Nota**: l'eseguibile del bot viene già generato quando si compila il server.
 ### Voci extra

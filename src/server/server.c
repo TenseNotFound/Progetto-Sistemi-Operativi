@@ -114,7 +114,7 @@ int main(int argc, char **argv){
         port = 5000 + (rand() % (65535 - 5000));
     } else port = (unsigned int) porta;
 
-    printf("\n      POSIX SERVER RELEASE        \nStartup server...\n");
+    printf("\n               POSIX SERVER RELEASE               \nStartup server...\n");
     fflush(stdout);
 
 
@@ -136,7 +136,7 @@ int main(int argc, char **argv){
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // ip assegnato dal DHCP
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // in ascolto su tutte le interfaccie
 
     int bound = 0; // appena ho successo mi fa uscire dal for
     for (int attempt = 0; attempt < TENTATIVI && !bound; attempt++) {
@@ -154,7 +154,7 @@ int main(int argc, char **argv){
     }
  
     if (!bound) {
-        perror("Impossibile trovare una porta libera dopo il numero massimo di tentativi concesso");
+        fprintf(stderr, "Impossibile trovare una porta libera dopo il numero massimo di tentativi concesso");
         goto exit;
     }
 
@@ -167,8 +167,9 @@ int main(int argc, char **argv){
     printf("\n==================================================\n         SERVER AVVIATO CON SUCCESSO         \n==================================================\n");
     printf(" Indirizzo IP : 0.0.0.0 (INADDR_ANY)\n Porta        : %u\n", port);
     printf(" Backlog      : %d (Coda massima client)\n", BACKLOG);
-    printf(" Per chiudere : CTRL + C\n==================================================\n[*] In attesa di nuove connessioni...\n\n");
-
+    printf(" Per chiudere : CTRL + C\n==================================================\n\n");
+    printf("==================================================\n              Connessione al server               \n==================================================\n");
+    printf(" Da questa macchina : ./battaglia_client 127.0.0.1 %u\n Da macchine diverse: ./battaglia_client <ip_server> %u \n In rete locale     : ./battaglia_client (auto mode)\n\n==================================================\n[*] In attesa di nuove connessioni...\n\n", port, port);
     fflush(stdout);
     
     struct sigaction sa;
@@ -327,9 +328,25 @@ int main(int argc, char **argv){
         } else {
             struct sockaddr_in bot;
             socklen_t lbot = sizeof(bot);
+            struct timeval tv;
+            tv.tv_sec = TIMEOUT_SOCKET;
+            tv.tv_usec = 0;
+
+            if(setsockopt(llisten, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){
+                perror("Errore nell'installare il timeout per attendere il Bot");
+                goto exit;
+            }
+
             int bot_fd = accept(llisten, (struct sockaddr *)&bot, &lbot);
+            tv.tv_sec = 0;
+
+            if(setsockopt(llisten, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){
+                perror("Errore nel rimuovere il timeout per l'attesa del Bot");
+                goto exit;
+            }
 
             if(bot_fd != -1){
+                
                 client_arg *cbot = malloc(sizeof(client_arg));
                 if(cbot == NULL){
                     perror("Errore nella malloc");
@@ -367,19 +384,7 @@ int main(int argc, char **argv){
     llisten = -1;
 
     if(n > 0){
-        /*
-                CAUSA RACE CONDITION E ROMPE LA CONSISTENZA DEI SEM_ID
-            int i = 0;
-            pthread_mutex_lock(&stato.lock);
-            for(player *p = stato.head; p!= NULL; p = p->next){
-                // questo for serve per rinumerare gli id dei semafori perchè un client potrebbe scollegarsi anche in lobby
-                p->sem_id = i++;
-            }
-
-            pthread_mutex_unlock(&stato.lock);
-        */
-        
-
+    
         for(int j = 0; j<slot; j++){
             semctl(sem1, j, SETVAL, 0);
         }
@@ -403,6 +408,7 @@ try:
         
 
         printf("[*] Startup della partita\n");
+        fflush(stdout);
 
         struct sembuf startup;
         startup.sem_flg = 0;
@@ -434,11 +440,13 @@ start:
             if(shutdown_flag) goto exit;
             goto start;
         }
-
+        printf("[*] Partita avviata con successo, player con sem_num = %d abilitato, vado in background \n", primo);
+        fflush(stdout);
+    } else {
+        if(!timeout) printf(" \n[!] Timer della lobby scaduto, nessun client connesso!\n");
+        else printf(" \n[!] Nessun client ha effettuato connessioni al server, chiudo...\n");
+        fflush(stdout);
     }
-
-    printf("[*] Partita avviata con successo, player 1 abilitato, vado in background \n");
-    fflush(stdout);
     
     while(!shutdown_flag){
         pthread_mutex_lock(&stato.lock);
@@ -482,7 +490,7 @@ exit:
             free(temp);
         }
         stato.head = NULL;
-    } else printf("[!] Ci sono ancora %d thread attivi e non terminati!\n", stato.active_threads);
+    } else printf("[!] Ci sono ancora %d thread attivi non terminati!\n", stato.active_threads);
     
     pthread_mutex_unlock(&stato.lock);
     
@@ -502,7 +510,7 @@ void *client_thread(void *args){
     ip[15] = '\0';    
     int portc = ntohs(cargs->client_addr.sin_port);
 
-    printf("Nuova connessione:\n [*] Client collegato %s:%d \n", ip, portc);
+    printf("Nuova connessione da parte del client: %s:%d \n", ip, portc);
     fflush(stdout);
 
     azioni msg;
@@ -510,6 +518,7 @@ void *client_thread(void *args){
 
     if(recv_msg(cargs->client_fd, &msg) != 0 || msg.type != JOIN){
         printf("(Server) handshake non validato per %s:%d\n", ip, portc);
+        fflush(stdout);
         goto exit;
         return NULL;
     }
@@ -520,6 +529,7 @@ void *client_thread(void *args){
 
     if (me == NULL) {
         printf("(Server) Impossibile creare struct player per %s:%d\n", ip, portc);
+        fflush(stdout);
         goto exit;
     }
 
@@ -530,20 +540,24 @@ void *client_thread(void *args){
 
     if(send_msg(cargs->client_fd, &welcome_msg) == -1){
         printf("Errore nell'invio del messaggio di benvenuto a %s:%d\n", ip, portc);
+        fflush(stdout);
         goto exit;
     }
 
     printf("Giocatore %d (\"%s\") connesso da %s:%d\n", me->id, msg.username, ip, portc);
+    fflush(stdout);
 
     azioni gamemode;
     memset(&gamemode, 0, sizeof(gamemode));
     if(recv_msg(fd, &gamemode) != 0 || gamemode.type != MODE){
         printf("[!] Errore nella ricezione della gamemode dal client %s:%d\n", ip, portc);
+        fflush(stdout);
         goto exit;
     }
 
     if(gamemode.gamemode != MODE_DEFAULT && gamemode.gamemode != MODE_1V1){
-        printf("[!] Ricevuta una modalità di gioco non valida da %s:%d", ip, portc);
+        printf("[!] Ricevuta una modalità di gioco non valida da %s:%d\n", ip, portc);
+        fflush(stdout);
         goto exit;
     }
 
@@ -565,7 +579,7 @@ void *client_thread(void *args){
         goto exit;
     }
 
-    printf("[*] In attesa della formazione da %s:%d (ID: %d)", ip, portc, me->id);
+    printf("[*] In attesa della formazione da %s:%d (ID: %d)\n", ip, portc, me->id);
     fflush(stdout);
 
     struct sembuf ready;
@@ -574,14 +588,15 @@ void *client_thread(void *args){
     ready.sem_op = 1;
 
     if(ricezione_navi(fd, me) != 0){
-        printf("Formazione ricevuta non valida");
+        printf("Formazione ricevuta non valida\n");
+        fflush(stdout);
         pthread_mutex_lock(&stato.lock);
         me->alive = 0;
         pthread_mutex_unlock(&stato.lock);
         goto post;
     }
 
-    printf("[*] Formazione ricevuta correttamente (%s)!\n", me->username);
+    printf("[*] Formazione ricevuta correttamente (%d, %s)!\n", me->id, me->username);
     fflush(stdout);
 
     bool fine_partita;
@@ -641,7 +656,8 @@ gback:
                 infopk.player_id = p->id;
                 strncpy(infopk.username, p->username, USERNAME-1);
                 if(send_msg(me->socket, &infopk) == -1){
-                    printf("Errore nell'invio del pacchetto di informazioni agli altri player");
+                    printf("Errore nel comunicare a %s:%d la lista degli utenti disponibili\n", username, id);
+                    fflush(stdout);
                     pthread_mutex_unlock(&stato.lock);
                     goto exit;
                 }
@@ -655,7 +671,7 @@ gback:
         turno.type = TURN;
         turno.player_id = id;
         if(send_msg(fd, &turno) == -1){
-            printf("Errore nel comunicare il turno a %s\n, rimuovo il player\n", username);
+            printf("Errore nel comunicare il turno a %s, rimuovo il player\n", username);
             fflush(stdout);
             pthread_mutex_lock(&stato.lock);
             me->alive = 0;
@@ -676,7 +692,7 @@ gback:
 
         azioni mossa;
         if(recv_msg(fd, &mossa) == -1 || mossa.type != MOVE){
-            printf("è stata ricevuta una mossa non valida oppure è stata persa la connessione da %s:%d, rimuovo il player\n", username, id);
+            printf("È stata ricevuta una mossa non valida oppure è stata persa la connessione da %s:%d, rimuovo il player\n", username, id);
             fflush(stdout);
             pthread_mutex_lock(&stato.lock);
             me->alive = 0;
@@ -733,6 +749,7 @@ gback:
                 if(affondata){
                     bersaglio->navi_rimaste--;
                     printf("[*] Il giocatore %s:%d ha affondato la nave di %s:%d!\n", username, id, bersaglio->username, bersaglio->id);
+                    fflush(stdout);
 
                     if(bersaglio->navi_rimaste <= 0){
                         bersaglio->alive = 0;
@@ -904,7 +921,8 @@ void remove_player(int id){
                 prev->next = curr->next;
             }
             stato.count--;
-            printf("[*] Giocatore %d (%s) rimosso con successo!", curr->id, curr->username);
+            printf("[*] Giocatore %d (%s) rimosso con successo!\n", curr->id, curr->username);
+            fflush(stdout);
             free(curr);
             return;
         }
@@ -920,15 +938,9 @@ player *trova_giocatore(int valore, bool flag){
     int chiave; // scelgo la chiave in base a quel che gli passo
 
     while(current != NULL){
-        if(flag){
-            chiave = current->sem_id;
-        } else {
-            chiave = current->id;
-        }
+        chiave = flag ? current->sem_id : current->id;
 
-        if(chiave == valore){
-            return current;
-        }
+        if(chiave == valore) return current;
         current = current->next;
     }
 
@@ -945,10 +957,10 @@ void *udp_discovery_port(void *args){
     }
 
     struct timeval time; // dal man di setsockopt
-    time.tv_sec = 2; 
+    time.tv_sec = TIMEOUT_SOCKET; 
     time.tv_usec = 0;
     if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &time, sizeof(time)) < 0) {
-        perror("errore nel setup del timer in setsockopt");
+        perror("Errore nel setup del timer in setsockopt");
         close(socket_fd);
         pthread_exit(NULL);
     }
@@ -974,7 +986,7 @@ void *udp_discovery_port(void *args){
 
     while(lobby_aperta){
         buffer[0] = '\0';
-        letti = recvfrom(socket_fd, buffer, sizeof(buffer)-1, 0, (struct sockaddr *)&client_addr, &client_addr_len); // bloccata al massimo per 2s
+        letti = recvfrom(socket_fd, buffer, sizeof(buffer)-1, 0, (struct sockaddr *)&client_addr, &client_addr_len); // bloccata al massimo per 2s (TIMEOUT_SOCKET)
         if(letti > 0){
             buffer[letti] = '\0';
             if(strcmp(buffer, "DISCOVER") == 0){
@@ -1040,7 +1052,7 @@ int ricezione_navi (int fd, player *me){
         posizionamento p; 
         memset(&p, 0, sizeof(p));
         if(readn(fd, &p, sizeof(p)) != (ssize_t)sizeof(p)){ //readn mi da ssize_t, sizeof mi da size_t: per coerenza sistemo i cast
-            perror("Errore nella ricezione della formazione ");
+            perror("Errore nella ricezione della formazione");
             return -1;
         }
 
@@ -1050,18 +1062,20 @@ int ricezione_navi (int fd, player *me){
         orientazione = p.orientation;
 
         if(index != i){
-            printf("Indice della nave errato");
+            printf("Indice della nave errato\n");
+            fflush(stdout);
             return -1;
         }
+
         if(!validazione_formazione(me->griglia, x, y, orientazione, ship_type[i].size, i)){
-            printf("Inserimento della nave non valido");
+            printf("Inserimento della nave non valido\n");
+            fflush(stdout);
             return -1;
         }
 
     }
 
     return 0;
-
 }
 
 void broadcast(azioni *esito){
@@ -1069,6 +1083,7 @@ void broadcast(azioni *esito){
     for(player *p = stato.head; p != NULL; p = p->next){
         if(send_msg(p->socket, esito) == -1){
             printf("Impossibile inviare il messaggio di esito al giocatore %s:%d\n", p->username, p->id);
+            fflush(stdout);
         }
     }
 }
@@ -1078,16 +1093,13 @@ void broadcast(azioni *esito){
 */
 
 void timeout_lobby(int sig){
-    //(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
     timeout = 0;
 }
 
 void chiusura (int sig){
-    //(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
     shutdown_flag = 1;
 }
 
 void gestore_bot(int sig){
-    //(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
     wait(NULL);
 }
