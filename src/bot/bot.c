@@ -47,6 +47,11 @@ unsigned int port;
 
 int main(int argc, char **argv) {
 
+        if(argc < 3){
+                printf("Sintassi corretta: %s <ip> <port>\n", argv[0]);
+                return -1;
+        }
+        
         char ip_buf[16] = {0};
         int  socketfd = -1;
         srand(time(NULL));
