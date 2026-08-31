@@ -330,7 +330,7 @@ int main(int argc, char **argv){
     n = stato.count;
     pthread_mutex_unlock(&stato.lock);
 
-    if(n == 1 && !shutdown_flag){
+    if(current_player == 1 && !shutdown_flag){
         printf("[*] Attenzione: un solo client collegato, startup del bot...\n");
         fflush(stdout);
         pid_t pid = fork();
@@ -356,6 +356,14 @@ int main(int argc, char **argv){
             }
 
             int bot_fd = accept(llisten, (struct sockaddr *)&bot, &lbot);
+
+            if(bot_fd != 1 && bot.sin_addr.s_addr != htonl(INADDR_LOOPBACK)){
+                printf("[*] Rilevato tentativo di connessione non previsto durante lo startup del bot, chiudo la connessione\n");
+                fflush(stdout);
+                close(bot_fd);
+                bot_fd = -1; // impedisco così che mi entri nella if dopo e mi crei il thread di gestione
+
+            }
             tv.tv_sec = 0;
 
             if(setsockopt(llisten, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){
