@@ -28,7 +28,6 @@ extern uint8_t targetId;
 void gui_init(bool flag);
 void init_board();
 void init_target_board(uint8_t id);
-void draw_board(char grid[GRID_SIZE][GRID_SIZE]);
 void addboat(int x, int y, char orientazione, uint8_t size);
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]);
 void server_connected(char *ip, unsigned int port, int id);
@@ -56,6 +55,24 @@ void chiusura_forzata(void);
 void waiting_player(void);
 void connection_lost_fallback(const char *ip_buf, unsigned int port);
 void mod_ospite();
+void nave_affondata(const char *nave, uint8_t id);
+void s_nave_affondata(const char *nave, uint8_t id);
+void discovery_server_errore(const char *pname);
+void sintassi_corretta(const char *pname);
+void invalid_port(void);
+void server_not_found(void);
+void connection_error(void);
+void invalid_ip(const char *ip);
+void inserisci_username(void);
+void username_too_long(size_t len);
+void inserisci_coordinate(const char *nave, uint8_t size);
+void invalid_placement(void);
+void discovery_req_sent(void);
+void server_found(const char *ip, unsigned int port);
+void failed_attempt(int i);
+void sig_received(void);
+void server_not_found_attempt(void);
+void mostra_flotta(void);
 
 void fflush_stdin(void); // serve per pulire il buffer di input, così da evitare che rimangano caratteri in stdin, visto che fflush(stdin) non esiste, lo creo io
 

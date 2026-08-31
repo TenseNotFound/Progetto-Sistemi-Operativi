@@ -105,27 +105,31 @@ int main(int argc, char **argv) {
 
 	if(argc == 1){
 		auto_mode = true;
+		gui_init(auto_mode);
 		if(discovery_server(ip_buf, &port) == -1){
-			printf("Errore nel discovery del server, inserisci manualmente ip e porta\n Sintassi: %s <IP> <port>\n", argv[0]);
+			discovery_server_errore(argv[0]);
 			goto chiusura;
 		}
-		fflush(stdout);
-
 	} else if(argc <3){
-		printf("Sintassi corretta: %s <IP> <port>\n", argv[0]);
+		sintassi_corretta(argv[0]);
 		goto chiusura;
 	} else {
 		int tport = atoi(argv[2]);
 		if(tport < 5000 || tport >65535){
-			printf("Inserisci un numero di porta valido nel range 5000-65535\n");
-			goto chiusura;
+			auto_mode = true;
+			gui_init(auto_mode);
+			invalid_port();
+			if(discovery_server(ip_buf, &port) == -1){
+				discovery_server_errore(argv[0]);
+				goto chiusura;
+        	}
+		} else {
+			port = (unsigned int)tport;
+			strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
+			gui_init(auto_mode);
 		}
-		port = (unsigned int)tport;
-		strncpy(ip_buf, argv[1], sizeof(ip_buf) - 1);
 	}
-
-	gui_init(auto_mode);
-
+	
 	struct sockaddr_in server_addr;
 	memset(&server_addr, 0,sizeof(server_addr));
 	
@@ -139,7 +143,7 @@ int main(int argc, char **argv) {
 	if(socketfd == -1){
 		connection_lost_fallback(ip_buf, port);
 		if(discovery_server(ip_buf, &port) == -1){
-			printf("Errore: impossibile trovare un server\n");
+			server_not_found();
 			goto chiusura;
 		}
 
@@ -147,7 +151,7 @@ int main(int argc, char **argv) {
 	}
 
 	if(socketfd == -1){
-		printf("Impossibile stabilire una connessione con il server\n");
+		connection_error();
 		goto chiusura;
 	}
 
@@ -193,12 +197,8 @@ int main(int argc, char **argv) {
 
 
 	init_board();
-	if(piazzamento_navi(socketfd) == -1){
-		printf("Impossibile comunicare al server la formazione, chiudo...\n");
-		fflush(stdout);
-		goto chiusura;
-	}
-
+	if(piazzamento_navi(socketfd) == -1) goto chiusura;
+	
 	waiting_player();
 
 	azioni pck;
@@ -250,7 +250,8 @@ int main(int argc, char **argv) {
 					draw_grids();
 
 					if(pck.type == HIT){
-						colpito();
+						if (pck.affondata < SHIP_NUMBER) nave_affondata(ship_type[pck.affondata].name, pck.target_id);
+						else colpito();
 					} else miss();
 
 				} else if(pck.target_id == mio_id){
@@ -264,7 +265,8 @@ int main(int argc, char **argv) {
 					draw_grids();
 
 					if(pck.type == HIT){
-						colpito();
+						if (pck.affondata < SHIP_NUMBER) s_nave_affondata(ship_type[pck.affondata].name, pck.player_id);
+						else colpito();
 					} else miss();
 
 
@@ -325,12 +327,12 @@ int connetti(char *ip, unsigned int porta, struct sockaddr_in *server_addr){
 
 #ifdef _WIN32
 	if (inet_pton(AF_INET, ip, &server_addr->sin_addr) != 1) {
-        printf("indirizzo ip non valido: %s\n", ip);
+        invalid_ip(ip);
         return -1;
     }
 #else
 	if (inet_aton(ip, &server_addr->sin_addr) == 0) {
-        printf("indirizzo ip non valido: %s\n", ip);
+        invalid_ip(ip);
         return -1;
     }
 #endif
@@ -383,8 +385,7 @@ int getUsername(char *buf, size_t len){
 
 	char temp[BUFFER_SIZE];
 	while(1) {
-        printf("\n[*] Inserisci il tuo username: ");
-        fflush(stdout); 
+        inserisci_username();
         
         if(scanf("%255s", temp) == EOF){
 			return -1;
@@ -405,16 +406,11 @@ int getUsername(char *buf, size_t len){
 			}
 			break;
         }
-        printf("Inserisci un username di massimo %zu caratteri!\n", len - 1);
+        username_too_long(len);
     }
 	return 0;
 }
 
-/*
-	LE FUNZIONI readn E writen SONO LE STESSE CHE VENGONO 
-	UTILIZZATE IN server.c, FORSE VERRANNO POI MIGRATE
-	IN UN FILE COMUNE PER CHIAREZZA
-*/
 
 int piazzamento_navi (int socket) {
 
@@ -425,9 +421,9 @@ int piazzamento_navi (int socket) {
 	int letti;
 
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
-		draw_board(grid);
+		mostra_flotta();
 		do {
-			printf("Inserisci le coordinate della nave %s (dimensione %u) e l'orientamento (N,S,E,O):\n", ship_type[i].name, ship_type[i].size);
+			inserisci_coordinate(ship_type[i].name, ship_type[i].size);
 			while((letti = scanf("%d %d %c", &x, &y, &orientazione))!= 3 || (toupper(orientazione) != 'N' && toupper(orientazione) != 'S' && toupper(orientazione) != 'E' && toupper(orientazione) != 'O' && toupper(orientazione) != 'W')){ 
 				
 				if(letti == EOF) return -1;
@@ -438,8 +434,7 @@ int piazzamento_navi (int socket) {
 			fflush_stdin();
 			valid = validazione(occupata, x - 1, y - 1, orientazione, ship_type[i].size);
 			if (!valid) {
-				printf("Posizionamento non valido: la nave esce dalla griglia o si sovrappone con un'altra nave. Riprova.\n");
-				fflush(stdout);
+				invalid_placement();
 			}
 		} while (!valid);
 
@@ -454,10 +449,11 @@ int piazzamento_navi (int socket) {
 		posizionamento_ok(ship_type[i].name, x, y, orientazione);
 	}
 
-	draw_board(grid);
+	mostra_flotta();
 
 	if(invio_navi(socket, posizioni_navi) == -1){
-		fprintf(stderr, "errore nell'invio delle posizioni delle navi\n");
+		if(errno == EPIPE || errno == ECONNRESET) connection_lost();
+		else fprintf(stderr, "errore nell'invio delle posizioni delle navi\n");
 		return -1;
 	}
 
@@ -520,8 +516,7 @@ int discovery_server(char *ip, unsigned int *port){
 	broadcast.sin_port = htons(DISCOVERY_PORT);
 	broadcast.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 	
-	printf("[*] Richiesta di discovery inviata con successo (broadcast). \n In attesa di riscontro dal server...\n");
-	fflush(stdout);
+	discovery_req_sent();
 
 	struct sockaddr_in ricezione;
 	socklen_t ricezione_s = sizeof(ricezione); // serve necessariamente perchè la recvfrom vuole un puntatore alla dim della struttura (man)
@@ -547,19 +542,17 @@ int discovery_server(char *ip, unsigned int *port){
                 ip[15] = '\0';
                 *port = (unsigned int)atoi(buffer);
 
-                printf("[*] Server trovato con successo!\n[*] In ascolto su %s:%u\n", ip, *port);
-				fflush(stdout);
+                server_found(ip, *port);
                 chiudi_socket(sock);
                 return 0;
             }
         }
         
-        printf(" -> Tentativo %d fallito (Timeout), riprovo...\n", i + 1);
-        fflush(stdout);
+        failed_attempt(i);
 
 	}
-	if(shutdown_flag) printf(" [*] Ricevuta segnalazione, interrompo \n...");
-	else printf("[*] Nessun server trovato in rete dopo %d tentativi.\n", TENTATIVI);
+	if(shutdown_flag) sig_received();
+	else server_not_found_attempt();
     chiudi_socket(sock);
     return -1;	
 

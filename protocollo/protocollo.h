@@ -2,6 +2,7 @@
 #define PROTOCOL_H
 
 #include <stdint.h>
+#include <string.h>
 #define SHIP_NUMBER 5
 #define GRID_SIZE 10
 #define BACKLOG 16
@@ -16,6 +17,7 @@
 #define BUFFER_SIZE 256
 #define TENTATIVI 20 // per la ricerca della porta
 #define USERNAME 17
+#define NESSUNA_NAVE SHIP_NUMBER // valore massimo non valido per comunicare l'indice della nave affondata
 
 typedef enum game_info{ // serve poi per capire che mossa/azione è stata fatta/compiuta/subita sul client
     WELCOME, JOIN, TURN, MOVE, HIT, MISS, ELIMINATED, WIN, MODE, INFO
@@ -35,6 +37,7 @@ typedef struct azioni{ // mi definisce la mossa
     uint8_t x,y; // posizione nave da colpire
     mode gamemode;
     char username[USERNAME];
+    uint8_t affondata; // indice della nave affondata
 } azioni;
 
 typedef struct posizionamento{ // mi definisce la nave

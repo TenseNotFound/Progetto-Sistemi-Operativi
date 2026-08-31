@@ -7,8 +7,9 @@
 #include <string.h>
 
 char grid[GRID_SIZE][GRID_SIZE];
-char target_grids[MAX_PLAYER +1][GRID_SIZE][GRID_SIZE]; // MAX_PLAYER +1 perchè gli id partono da 0
-static bool grigliaN_inizializz[MAX_PLAYER +1] = {false}; // tiene traccia di quale grilia è inizializzata o meno
+char target_grids[MAX_PLAYER +1][GRID_SIZE][GRID_SIZE]; // MAX_PLAYER +1 perchè gli id partono da 1
+static bool grigliaN_inizializz[MAX_PLAYER +1] = {false}; // tiene traccia di quale griglia è inizializzata o meno
+static bool ingame = false;
 uint8_t targetId = 0;
 
 
@@ -25,7 +26,7 @@ void gui_init(bool flag){
     clean_screen();
 
     if(flag){
-        printf(GIALLO "[!] Modalità connessione automatica attiva. \n[*] Startup in corso...\n" RESET);
+        printf(GIALLO " [!] Modalità connessione automatica attiva. \n [*] Startup in corso...\n" RESET);
     }
     
     printf(BLU "====================================================================\n");
@@ -40,24 +41,23 @@ void gui_init(bool flag){
     printf("====================================================================\n\n"RESET);
     
     printf("Benvenuto nel gioco battaglia navale!\n");
-    printf(GIALLO"[*] In attesa della connessione con il server...\n\n"RESET);
+    printf(GIALLO" [*] In attesa della connessione con il server...\n\n"RESET);
     
     fflush(stdout);
 }
 
 void server_connected(char *ip, unsigned int port, int id){
-    printf(VERDE"[*] Connessione stabilita con il server %s:%u\n" RESET, ip, port);
-    printf("[*] Il tuo ID e': " VERDE "%d\n" RESET, id);
+    printf(VERDE" [*] Connessione stabilita con il server %s:%u\n" RESET, ip, port);
+    printf(" [*] Il tuo ID e': " VERDE "%d\n" RESET, id);
     fflush(stdout);
 }
 
 void init_board(){
     cleanup_board(grid);
     targetId = 0;
-    for(int i = 0; i<MAX_PLAYER; i++){
+    for(int i = 0; i<=MAX_PLAYER; i++){
         grigliaN_inizializz[i] = false; 
     }
-    draw_board(grid);
 }
 
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]){
@@ -76,9 +76,7 @@ void init_target_board(uint8_t id){
     }
 }
 
-void draw_board(char griglia[GRID_SIZE][GRID_SIZE]) {
-    printf(VERDE"\n---LA TUA FLOTTA---\n"RESET);
-    fflush(stdout);
+static void draw_board(char griglia[GRID_SIZE][GRID_SIZE]) {
     char buffer[BOARD_BUFFER_SIZE];
     size_t offset = 0;
     int scritto = 0;
@@ -128,9 +126,9 @@ void draw_grids(){
     
     printf(ROSSO"\n--- RADAR NEMICO ---\n"RESET);
     if(targetId == 0) {
-        printf(GIALLO"[!] Nessun nemico ancora selezionato\n"RESET);
+        printf(GIALLO" [!] Nessun nemico ancora selezionato\n"RESET);
     } else {
-        printf("[*] Radar del player id:%d\n", targetId);
+        printf(" [*] Radar del player id:%d\n", targetId);
         draw_board(target_grids[targetId]);
     }
 }
@@ -140,8 +138,8 @@ void clean_screen(){
 }
 
 void close_game(){
-    clean_screen();
-    printf("Grazie per aver giocato! Arrivederci!\n");
+    if(ingame) printf(VERDE"\n [!] Grazie per aver giocato! Arrivederci!\n"RESET);
+    else printf(GIALLO"\n [!] Chiusura del client\n"RESET);
     fflush(stdout);
     exit(0);
 }
@@ -193,7 +191,7 @@ int game_mode(){
 
 void connection_lost(void){
 
-    printf(ROSSO"\n[!] Connessione al server persa\n"RESET);
+    printf(ROSSO"\n [!] Connessione al server persa\n"RESET);
     fflush(stdout);
 }
 
@@ -213,6 +211,23 @@ void bersagli(uint8_t id, char *username){
     target = nemico;
 }
 
+static bool bersaglio_valido(int id){
+    for(nemici *curr = target; curr != NULL; curr = curr->next){
+        if(curr->id == id) return true;
+    }
+    return false;
+}
+
+static void free_bersagli(void){
+    nemici *curr = target, *temp;
+    while(curr != NULL) {
+        temp = curr;
+        curr = curr->next;
+        free(temp);
+    }
+    target = NULL;
+}
+
 void turno() {
     printf(VERDE"\n==================================================\n");
     printf(" [*] È IL TUO TURNO \n");
@@ -228,17 +243,6 @@ void turno() {
     }
     printf(ROSSO "----------------------------\n"RESET);
     fflush(stdout);
-
-    // stampo i nomi che sono temporanei, quindi poi libero subito
-    curr = target;
-    nemici *temp;
-    while(curr != NULL) {
-        temp = curr;
-        curr = curr->next;
-        free(temp);
-    }
-    
-    target = NULL;
 }
 
 void ricezione_mossa(azioni *mossa) {
@@ -250,68 +254,79 @@ void ricezione_mossa(azioni *mossa) {
     int letti;
     while (!mossa_valida) {
         
-        printf("\nInserisci l'ID del giocatore da colpire: ");
+        printf("\n [*] Inserisci l'ID del giocatore da colpire: ");
+        fflush(stdout);
         if((letti = scanf("%d", &bersaglio)) == EOF) close_game();
-        if(letti != 1 || bersaglio < 1 || bersaglio > MAX_PLAYER) {
-            if(bersaglio == mossa->player_id){
-                printf(GIALLO"[!] Non puoi fare fuoco a te stesso!\n"RESET);
-                fflush_stdin();
-                continue;
-            }
-            printf(GIALLO"[!] Inserisci un id valido\n"RESET);
+        if(letti != 1 || !bersaglio_valido(bersaglio)) {
+            printf(GIALLO" [!] Inserisci un id tra quelli disponibili\n"RESET);
+            fflush(stdout);
             fflush_stdin(); 
             continue;
         }
 
-        printf("Inserisci le coordinate <Y> <n>: ");
-        letti = scanf(" %c %d", &x_in, &y);
-        if(letti == EOF) close_game();
-        if(letti != 2){
-            printf("[!] Inserisci delle coordinate valide !\n"RESET);
+        if(bersaglio == mossa->player_id){
+            printf(GIALLO" [!] Non puoi fare fuoco a te stesso!\n"RESET);
+            fflush(stdout);
             fflush_stdin();
             continue;
         }
-        
-        y = y - 1;
-        int x = -1;
-
-        if (x_in >= 'a' && x_in <= 'j') x = x_in - 'a'; // CAST ASCII -> 'a' = 97; 'A' = 65
-        else if (x_in >= 'A' && x_in <= 'J') x = x_in - 'A';
-
-        if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-            init_target_board((uint8_t)bersaglio);
-            if (target_grids[bersaglio][x][y] == 'X' || target_grids[bersaglio][x][y] == 'O') {
-                printf(GIALLO"[!] Hai già sparato in queste coordinate. Scegli un altro bersaglio!\n"RESET);
-            } else {
-                mossa->target_id = bersaglio;
-                mossa->x = x;
-                mossa->y = y;
-                targetId = (uint8_t)bersaglio;
-                mossa_valida = true;
+        while(!mossa_valida){
+            printf("Inserisci le coordinate <Y> <n>: ");
+            letti = scanf(" %c %d", &x_in, &y);
+            if(letti == EOF) close_game();
+            if(letti != 2){
+                printf(GIALLO" [!] Inserisci delle coordinate valide !\n"RESET);
+                fflush_stdin();
+                fflush(stdout);
+                continue;
             }
-        } else {
-            printf(ROSSO"[!] Coordinate non valide. Devi inserire Lettera (A-J) e Numero (1-10).\n"RESET);
+
+            fflush_stdin();
+
+            y = y - 1;
+            int x = -1;
+
+            if (x_in >= 'a' && x_in <= 'j') x = x_in - 'a'; // CAST ASCII -> 'a' = 97; 'A' = 65
+            else if (x_in >= 'A' && x_in <= 'J') x = x_in - 'A';
+
+            if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+                init_target_board((uint8_t)bersaglio);
+                if (target_grids[bersaglio][x][y] == 'X' || target_grids[bersaglio][x][y] == 'O') {
+                    printf(GIALLO" [!] Hai già sparato in queste coordinate!\n"RESET);
+                    fflush(stdout);
+                } else {
+                    mossa->target_id = bersaglio;
+                    mossa->x = x;
+                    mossa->y = y;
+                    targetId = (uint8_t)bersaglio;
+                    mossa_valida = true;
+                }
+            } else {
+                printf(ROSSO" [!] Coordinate non valide. Devi inserire Lettera (A-J) e Numero (1-10).\n"RESET);
+                fflush(stdout);
+            }
         }
     }
+    free_bersagli();
 }
 
 void errore_invio_mossa(void) { 
-    printf(ROSSO"\n[!] Errore: Impossibile inviare la mossa al server.\n"RESET);
+    printf(ROSSO"\n [!] Errore: Impossibile inviare la mossa al server.\n"RESET);
     fflush(stdout);
 }
 
 void non_mio_turno(uint8_t id) {
-    printf(GIALLO"\n[*] È il turno del giocatore %u. In attesa...\n"RESET, id);
+    printf(GIALLO"\n [*] È il turno del giocatore %u. In attesa...\n"RESET, id);
     fflush(stdout);
 }
 
 void colpito() {
-    printf(VERDE"\n[+] BERSAGLIO COLPITO!\n"RESET);
+    printf(VERDE"\n [+] BERSAGLIO COLPITO!\n"RESET);
     fflush(stdout);
 }
 
 void miss() {
-    printf(GIALLO"\n[-] Mancato!\n"RESET);
+    printf(GIALLO"\n [-] Mancato!\n"RESET);
     fflush(stdout);
 }
 
@@ -320,7 +335,7 @@ void spettatore(azioni *pck) {
     if (pck->type == HIT) strcpy(esito_str, VERDE"COLPITO"RESET);
     else strcpy(esito_str, GIALLO"MANCATO"RESET);
     
-    printf(BLU"\n[*] Il giocatore %d ha sparato al giocatore %d in %c%d: %s!\n"RESET, 
+    printf(BLU"\n [*] Il giocatore %d ha sparato al giocatore %d in %c%d: %s!\n"RESET, 
             pck->player_id, pck->target_id, pck->x + 'A', pck->y + 1, esito_str);
     fflush(stdout);
 }
@@ -360,16 +375,17 @@ void fflush_stdin(void){
 }
 
 void welcomeback(char *buff){
-    printf(VERDE"[*] Bentornato %s! \n"RESET, buff);
+    printf(VERDE" [*] Bentornato %s! \n"RESET, buff);
     fflush(stdout);
 }
 
 void invalid_input(void){
-    printf(ROSSO"[!] Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"RESET); 
+    printf(ROSSO" [!] Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"RESET); 
+    fflush(stdout);
 }
 
 void posizionamento_ok(const char *nave, int x, int y, char orientazione){
-    printf(VERDE"[*] Nave %s posizionata in (%d,%d) con orientamento %c\n"RESET, nave, x, y, orientazione);
+    printf(VERDE" [*] Nave %s posizionata in (%d,%d) con orientamento %c\n"RESET, nave, x, y, orientazione);
     fflush(stdout);
 }
 
@@ -379,16 +395,107 @@ void chiusura_forzata(void){
 }
 
 void waiting_player(void){
-    printf(GIALLO"\n[*] In attesa che tutti i giocatori siano pronti...\n"RESET);
+    ingame = true;
+    printf(GIALLO"\n [*] In attesa che tutti i giocatori siano pronti...\n"RESET);
     fflush(stdout);
 }
 
 void connection_lost_fallback(const char *ip_buf, unsigned int port){
-    printf(GIALLO"[*] Connessione a %s:%u fallita, provo il discovery automatico...\n"RESET, ip_buf, port);
+    printf(GIALLO" [*] Connessione a %s:%u fallita, provo il discovery automatico...\n"RESET, ip_buf, port);
 	fflush(stdout);
 }
 
 void mod_ospite(void){
-    printf(GIALLO"[!] Modalità ospite attivata\n"RESET);
+    printf(GIALLO" [!] Modalità ospite attivata\n"RESET);
     fflush(stdout);
+}
+
+void nave_affondata(const char *nave, uint8_t id){
+    printf(VERDE" [!] Hai affondato %s (%d)!\n"RESET, nave, id);
+    fflush(stdout);
+}
+
+void s_nave_affondata(const char *nave, uint8_t id){
+    printf(ROSSO" [!] Il giocatore con id %d ha affondato la nave %s della tua flotta!\n"RESET, id, nave);
+    fflush(stdout);
+}
+
+void discovery_server_errore(const char *pname){
+    printf(ROSSO " [!] Errore nel discovery del server, inserisci manualmente ip e porta\n Sintassi: %s <IP> <port>\n"RESET, pname);
+    fflush(stdout);
+}
+
+void sintassi_corretta(const char *pname){
+    printf(GIALLO " [!] Sintassi corretta: %s <IP> <port>\n"RESET, pname);
+    fflush(stdout);
+}
+
+void invalid_port(){
+	printf(GIALLO " [!] Inserisci un numero di porta valido nel range 5000-65535, provo ora il discovery automatico...\n"RESET);
+    fflush(stdout);
+}
+
+void server_not_found(){
+    printf(ROSSO " [!] Errore: impossibile trovare un server\n" RESET); 
+    fflush(stdout);
+}
+
+void connection_error(){
+    printf(ROSSO" [!] Impossibile stabilire una connessione con il server\n"RESET);
+    fflush(stdout);
+}
+
+void invalid_ip(const char *ip){
+    printf(GIALLO" [!] Indirizzo ip non valido: %s\n"RESET, ip); 
+    fflush(stdout);
+}
+
+void inserisci_username(){
+    printf("\n [*] Inserisci il tuo username: ");
+    fflush(stdout);
+}
+
+void username_too_long(size_t len){
+    printf(GIALLO " [!] Inserisci un username di massimo %zu caratteri!\n"RESET, len - 1);
+    fflush(stdout);
+}
+
+void inserisci_coordinate(const char *nave, uint8_t size){
+    printf(" [*] Inserisci le coordinate della nave %s (dimensione %u) e l'orientamento (N,S,E,O):\n", nave, size);
+    fflush(stdout);
+}
+
+void invalid_placement(){
+    printf(GIALLO" [!] Posizionamento non valido: la nave esce dalla griglia o si sovrappone con un'altra nave. Riprova.\n"RESET);
+	fflush(stdout);
+}
+
+void discovery_req_sent(){
+    printf(GIALLO" [*] Richiesta di discovery inviata con successo (broadcast). \n In attesa di riscontro dal server...\n"RESET);
+    fflush(stdout);
+}
+
+void server_found(const char *ip, unsigned int port){
+    printf(VERDE" [*] Server trovato con successo!\n [*] In ascolto su %s:%u\n"RESET, ip, port);
+	fflush(stdout);
+}
+
+void failed_attempt(int i){
+    printf(GIALLO" [!] Tentativo %d fallito (Timeout), riprovo...\n"RESET, i + 1);
+    fflush(stdout);
+}
+
+void sig_received(void){
+    printf(GIALLO" [*] Ricevuta segnalazione, interrompo... \n"RESET);
+    fflush(stdout);
+}
+
+void server_not_found_attempt(){
+    printf(ROSSO" [*] Nessun server trovato in rete dopo %d tentativi.\n"RESET, TENTATIVI);
+    fflush(stdout);
+}
+
+void mostra_flotta(){
+    printf(VERDE"\n--- LA TUA FLOTTA ---\n"RESET);
+    draw_board(grid);
 }

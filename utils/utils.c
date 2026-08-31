@@ -126,6 +126,7 @@ int send_msg(int fd, azioni *msg){
     packet.target_id = msg->target_id;
     packet.x = msg->x; // endianess free -> mando 1 byte e non 4, nessun problema di endiannes
     packet.y = msg->y;
+    packet.affondata = msg->affondata;
 	packet.gamemode = htonl(msg->gamemode);
 	memcpy(packet.username, msg->username, USERNAME);
 // c'è rischio che in TCP si scrivano meno byte di quelli richiesti,
@@ -175,6 +176,7 @@ int recv_msg(int fd, azioni *msg){
         msg->target_id = packet.target_id;
         msg->x = packet.x; // endianess free -> mando 1 byte e non 4, nessun problema di endiannes
         msg->y = packet.y;
+        msg->affondata = packet.affondata;
 		msg->gamemode = ntohl(packet.gamemode);
 		memcpy(msg->username, packet.username, USERNAME);
         msg->username[USERNAME -1 ] = '\0';

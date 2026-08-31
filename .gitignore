@@ -5,3 +5,5 @@ battaglia_bot
 _user
 *.o
 *.out
+.DS_Store
+desktop.ini

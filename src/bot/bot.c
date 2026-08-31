@@ -24,6 +24,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// non necessitando di interfaccia grafica, sarebbe stato inutile importare tutta la gui per solo due colori
+// li ridefinisco qui
+#define CIANO "\x1b[36m"
+#define RESET "\x1b[0m"
+
 volatile sig_atomic_t shutdown_flag = 0;
 
 void gestore(int sig);
@@ -48,10 +53,10 @@ unsigned int port;
 int main(int argc, char **argv) {
 
         if(argc < 3){
-                printf("Sintassi corretta: %s <ip> <port>\n", argv[0]);
+                fprintf(stderr, "[BOT] Sintassi corretta: %s <ip> <port>\n", argv[0]);
                 return -1;
         }
-        
+
         char ip_buf[16] = {0};
         int  socketfd = -1;
         srand(time(NULL));
@@ -81,7 +86,7 @@ int main(int argc, char **argv) {
         int mio_id = -1;
 
         if((socketfd = connetti(ip_buf, port, &server_addr)) == -1){
-                printf("[BOT] Impossibile collegarsi al server\n");
+                printf(CIANO"[BOT] Impossibile collegarsi al server\n"RESET);
                 goto chiusura;
         }
         
@@ -92,24 +97,24 @@ int main(int argc, char **argv) {
         msg.type = JOIN;
 
         if(send_msg(socketfd, &msg) == -1){
-                printf("[BOT] Errore nella ricezione del messaggio di JOIN");
+                printf(CIANO"[BOT] Errore nell'invio del messaggio di JOIN\n"RESET);
                 goto chiusura;
         }
 
         azioni welcome_msg;
         if(recv_msg(socketfd, &welcome_msg) == -1){
-                printf("[BOT] Errore nella ricezione del messaggio di WELCOME");
+                printf(CIANO"[BOT] Errore nella ricezione del messaggio di WELCOME\n"RESET);
                 goto chiusura;
         }
 
         if(welcome_msg.type != WELCOME){
-                printf("[BOT] Messaggio di benvenuto non valido\n");
+                printf(CIANO"[BOT] Messaggio di benvenuto non valido\n"RESET);
                 goto chiusura;
         }
 
         // ok handshake, il server mi ha assegnato un id
         mio_id = welcome_msg.player_id;
-        printf("[BOT] Connesso a %s:%u, id %d\n", ip_buf, port, mio_id);
+        printf(CIANO"[BOT] Connesso a %s:%u, id %d\n"RESET, ip_buf, port, mio_id);
         fflush(stdout);
 
         azioni mode_msg;
@@ -124,11 +129,11 @@ int main(int argc, char **argv) {
         }
 
         if(piazzamento_navi(socketfd) == -1){
-                printf("[BOT] Errore nell'invio della formazione al server\n");
+                printf(CIANO"[BOT] Errore nell'invio della formazione al server\n"RESET);
                 goto chiusura;
         }
 
-        printf("\n[BOT] Formazione inviata\n [*] In attesa che tutti i giocatori siano pronti...\n");
+        printf(CIANO"\n[BOT] Formazione inviata\n[*] In attesa che tutti i giocatori siano pronti...\n"RESET);
         fflush(stdout);
 
         azioni pck;
@@ -137,7 +142,7 @@ int main(int argc, char **argv) {
         while(vivo && !shutdown_flag){
                 memset(&pck, 0, sizeof(pck));
                 if(recv_msg(socketfd, &pck) == -1){
-                        if(!shutdown_flag) printf("[BOT] Connesssione al server persa\n");
+                        if(!shutdown_flag) printf(CIANO"[BOT] Connessione al server persa\n"RESET);
                         break;
                 }
 
@@ -156,7 +161,7 @@ int main(int argc, char **argv) {
                                         selezione_prossima_mossa(&mossa.target_id, &mossa.x, &mossa.y);
 
                                         if(send_msg(socketfd, &mossa) == -1){
-                                                printf("[BOT] Impossibile inviare la mossa al server\n");
+                                                printf(CIANO"[BOT] Impossibile inviare la mossa al server\n"RESET);
                                                 goto chiusura;
                                         }
                                 }
@@ -168,6 +173,13 @@ int main(int argc, char **argv) {
                                         tentativi[pck.x][pck.y] = true;
 
                                         if (pck.type == HIT) {
+                                                if(pck.affondata < SHIP_NUMBER){
+                                                        inseguimento = false;
+                                                        direzione_colpi = -1;
+                                                        direzione_tentata = -1;
+                                                        riprovato_verso_opposto = false;
+                                                        break;
+                                                }
                                                 if (!inseguimento) {
                                                   inseguimento = true;
                                                   direzione_colpi = -1;
@@ -190,7 +202,7 @@ int main(int argc, char **argv) {
                                break;
                         case ELIMINATED:
                                 if(pck.target_id == mio_id){
-                                        printf("[BOT] Sono stato eliminato\n");
+                                        printf(CIANO"[BOT] Sono stato eliminato\n"RESET);
                                         fflush(stdout);
                                         // chiudo -> inutile rimenere come spettatore
                                         vivo = false;
@@ -198,8 +210,8 @@ int main(int argc, char **argv) {
                                 break;
 
                         case WIN:
-                                if(pck.player_id == mio_id) printf("[BOT] Ho vinto\n");
-                                else printf("[BOT] Ha vinto il player con id %d\n", pck.player_id);
+                                if(pck.player_id == mio_id) printf(CIANO"[BOT] Ho vinto\n"RESET);
+                                else printf(CIANO"[BOT] Ha vinto il player con id %d\n"RESET, pck.player_id);
                                 fflush(stdout);
                                 vivo = false;
                                 break;
@@ -212,7 +224,7 @@ int main(int argc, char **argv) {
 chiusura:
 
         if(shutdown_flag){
-                printf("\n[BOT] Chiusura forzata rilevata\n");
+                printf(CIANO"\n[BOT] Chiusura forzata rilevata\n"RESET);
                 fflush(stdout);
         }
 
@@ -345,7 +357,7 @@ int piazzamento_navi (int socket) {
                 posizioni_navi[i].orientation = orientazione;
 
                 
-                printf("[BOT] Nave %s posizionata in (%d,%d) con orientamento %c\n", ship_type[i].name, x, y, orientazione);
+                printf(CIANO"[BOT] Nave %s posizionata in (%d,%d) con orientamento %c\n"RESET, ship_type[i].name, x, y, orientazione);
                 fflush(stdout);
         }
 

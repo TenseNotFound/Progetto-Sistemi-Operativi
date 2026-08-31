@@ -64,7 +64,7 @@ Se la porta inserita non risulta valida oppure occupata, il server procede a sce
 ### Client
 
 Il client si divide in due release: una per ambienti POSIX, una per ambienti WINAPI. Per poter compilare si deve digitare:
->**Per ambiente WINAPI**: sviluppo e test sono stati effettuati su shell MSYS2 (MinGW64) tramite compilatore gcc!
+>**Per ambiente WINAPI**: sviluppo e test sono stati effettuati su shell MSYS2 ([UCRT64](https://www.msys2.org/)) tramite compilatore gcc. A seguito dell'installazione è necessario installare la toolchain di compilazione: digitare `pacman -S mingw-w64-ucrt-x86_64-gcc make`.
 ```bash
 make client      # permette la compilazione dell'eseguibile del client (POSIX)
 make wclient     # permette la compilazione dell'eseguibile del client (WINAPI)
