@@ -246,14 +246,14 @@ int main(int argc, char **argv) {
 					
 					target_grids[pck.target_id][pck.x][pck.y] = esito;
 					targetId = pck.target_id;
-					clean_screen();
-					draw_grids();
-
+					
 					if(pck.type == HIT){
 						if (pck.affondata < SHIP_NUMBER) nave_affondata(ship_type[pck.affondata].name, pck.target_id);
 						else colpito();
 					} else miss();
-
+					
+					clean_screen();
+					draw_grids();
 				} else if(pck.target_id == mio_id){
 
 					if(pck.type == MISS){
@@ -261,14 +261,14 @@ int main(int argc, char **argv) {
 					} else esito = 'X';
 
 					grid[pck.x][pck.y] = esito;
-					clean_screen();
-					draw_grids();
-
+					
 					if(pck.type == HIT){
 						if (pck.affondata < SHIP_NUMBER) s_nave_affondata(ship_type[pck.affondata].name, pck.player_id);
 						else colpito();
 					} else miss();
-
+					
+					clean_screen();
+					draw_grids();
 
 				} else {
 					spettatore(&pck);

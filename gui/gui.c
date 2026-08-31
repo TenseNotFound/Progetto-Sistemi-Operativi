@@ -10,6 +10,7 @@ char grid[GRID_SIZE][GRID_SIZE];
 char target_grids[MAX_PLAYER +1][GRID_SIZE][GRID_SIZE]; // MAX_PLAYER +1 perchè gli id partono da 1
 static bool grigliaN_inizializz[MAX_PLAYER +1] = {false}; // tiene traccia di quale griglia è inizializzata o meno
 static bool ingame = false;
+static char esito[128] = ""; // mi serve perchè non riuscivo mai a vedere le notifiche di HIT a schermo, così è sicuro che vengono stampate perchè è direttamente draw_grids() a stampare le notifiche
 uint8_t targetId = 0;
 
 
@@ -131,6 +132,11 @@ void draw_grids(){
         printf(" [*] Radar del player id:%d\n", targetId);
         draw_board(target_grids[targetId]);
     }
+
+    if(esito[0] != '\0'){
+        printf("\n%s\n", esito);
+    }
+    fflush(stdout);
 }
 
 void clean_screen(){
@@ -321,12 +327,17 @@ void non_mio_turno(uint8_t id) {
 }
 
 void colpito() {
-    printf(VERDE"\n [+] BERSAGLIO COLPITO!\n"RESET);
+    snprintf(esito, sizeof(esito), VERDE"\n [+] BERSAGLIO COLPITO!\n"RESET);
     fflush(stdout);
 }
 
 void miss() {
-    printf(GIALLO"\n [-] Mancato!\n"RESET);
+    snprintf(esito, sizeof(esito), GIALLO"\n [-] Mancato!\n"RESET);
+    fflush(stdout);
+}
+
+void nave_affondata(const char *nave, uint8_t id){
+    snprintf(esito, sizeof(esito), VERDE" [!] Hai affondato %s (%d)!\n"RESET, nave, id);
     fflush(stdout);
 }
 
@@ -407,11 +418,6 @@ void connection_lost_fallback(const char *ip_buf, unsigned int port){
 
 void mod_ospite(void){
     printf(GIALLO" [!] Modalità ospite attivata\n"RESET);
-    fflush(stdout);
-}
-
-void nave_affondata(const char *nave, uint8_t id){
-    printf(VERDE" [!] Hai affondato %s (%d)!\n"RESET, nave, id);
     fflush(stdout);
 }
 

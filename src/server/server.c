@@ -826,8 +826,16 @@ next_turn:
                 break;
             }
         }
+        int vivi = 0;
+        int vincitore = id;
+        for(player *p = stato.head; p != NULL; p = p->next){
+            if(p->alive){
+                vivi ++;
+                vincitore = p->id;
+            }
+        }
 
-        bool solo = (prossimo == -1); // per vedere se ci sono altri avversari
+        bool solo = (vivi <=1 || prossimo == -1); // per vedere se ci sono altri avversari
         if(solo && !stato.fine){
             stato.fine = fine_partita = 1; //sono solo chiudo la partira
         } else if(colpito && !solo) prossimo = semid;
@@ -838,7 +846,7 @@ next_turn:
             azioni win; 
             memset(&win, 0, sizeof(win));
             win.type = WIN;
-            win.player_id = id;
+            win.player_id = vincitore;
 
             pthread_mutex_lock(&stato.lock);
             broadcast(&win);
