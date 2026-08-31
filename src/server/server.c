@@ -665,7 +665,7 @@ gback:
         strncpy(username, me->username, USERNAME);
         pthread_mutex_unlock(&stato.lock);
 
-        if(!alive) goto exit;
+        if(!alive) goto next_turn;
 
         pthread_mutex_lock(&stato.lock);
         for(player *p  = stato.head; p != NULL; p = p->next){
@@ -879,7 +879,7 @@ pass:
         pthread_mutex_lock(&stato.lock);
         alive = me->alive;
         pthread_mutex_unlock(&stato.lock);
-        if(!alive) goto next_turn;
+        if(!alive) goto exit;
     }
     
 
