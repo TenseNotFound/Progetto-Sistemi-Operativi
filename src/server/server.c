@@ -678,8 +678,9 @@ gback:
                 if(send_msg(me->socket, &infopk) == -1){
                     printf("[!] Errore nel comunicare a %s (%d) la lista degli utenti disponibili\n", username, id);
                     fflush(stdout);
+                    me->alive = 0;
                     pthread_mutex_unlock(&stato.lock);
-                    goto exit;
+                    goto next_turn;
                 }
             }
         }
@@ -711,8 +712,9 @@ gback:
         }
 
         azioni mossa;
-        if(recv_msg(fd, &mossa) == -1 || mossa.type != MOVE){
-            printf("[!] È stata ricevuta una mossa non valida oppure è stata persa la connessione da %s (%d), rimuovo il player\n", username, id);
+        if((ret = recv_msg(fd, &mossa)) == -1 || mossa.type != MOVE){
+            if(ret == -1) printf("[!] Connessione persa con %s (%d), rimuovo il player\n", username, id);
+            else printf("[!] Ricevuto un pacchetto dati non valido da %s (%d)\n", username, id);
             fflush(stdout);
             pthread_mutex_lock(&stato.lock);
             me->alive = 0;
@@ -877,7 +879,7 @@ pass:
         pthread_mutex_lock(&stato.lock);
         alive = me->alive;
         pthread_mutex_unlock(&stato.lock);
-        if(!alive) goto exit;
+        if(!alive) goto next_turn;
     }
     
 
