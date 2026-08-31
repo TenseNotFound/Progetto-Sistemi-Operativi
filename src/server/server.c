@@ -32,7 +32,7 @@ typedef azioni mosse;
 typedef struct players player;
 
 volatile sig_atomic_t timeout = 1, lobby_aperta = 1, shutdown_flag = 0, sig_ricevuta = 0;
-int sem1 = -1, sem2 = -1, n = 0 /*client attivi -> serve per le post su sem2*/, slot = 0 /*quanti sem_id assegnati contando anche quelli di quit*/;
+int sem1 = -1, sem2 = -1, slot = 0; /*slot: dimensiona sem1 e sem2*/
 unsigned int port;  
 /*
     sem1-> serve per i turni
@@ -326,9 +326,6 @@ int main(int argc, char **argv){
     }
 
     lobby_aperta = 0;
-    pthread_mutex_lock(&stato.lock);
-    n = stato.count;
-    pthread_mutex_unlock(&stato.lock);
 
     if(current_player == 1 && !shutdown_flag){
         printf("[*] Attenzione: un solo client collegato, startup del bot...\n");
@@ -357,7 +354,7 @@ int main(int argc, char **argv){
 
             int bot_fd = accept(llisten, (struct sockaddr *)&bot, &lbot);
 
-            if(bot_fd != 1 && bot.sin_addr.s_addr != htonl(INADDR_LOOPBACK)){
+            if(bot_fd != -1 && bot.sin_addr.s_addr != htonl(INADDR_LOOPBACK)){
                 printf("[*] Rilevato tentativo di connessione non previsto durante lo startup del bot, chiudo la connessione\n");
                 fflush(stdout);
                 close(bot_fd);
@@ -398,18 +395,17 @@ int main(int argc, char **argv){
                     goto exit;
                 }
                 pthread_detach(tid);
-                n++;
                 current_player++;
 
             } else perror("Errore nell'accept del bot");
         } 
     }
 
-    slot = current_player;
+    slot = current_player; // connessioni accettate e non handshake completati
     close(llisten);
     llisten = -1;
 
-    if(n > 0 && !shutdown_flag){
+    if(slot > 0 && !shutdown_flag){
     
         for(int j = 0; j<slot; j++){
             semctl(sem1, j, SETVAL, 0);
@@ -420,7 +416,7 @@ int main(int argc, char **argv){
 
         struct sembuf sem;
         sem.sem_flg = 0;
-        sem.sem_op = -n; // -n così mi fanno le post e torna a 0
+        sem.sem_op = -slot; // -slot così mi fanno le post e torna a 0
         sem.sem_num = 0;
 
 try:
@@ -527,6 +523,7 @@ exit:
 }
 
 void *client_thread(void *args){
+    bool posted = false; // mi segnala se ho fatto post su sem2
     client_arg *cargs = (client_arg *)args;
     player *me = NULL;
     int fd = cargs->client_fd;
@@ -637,7 +634,7 @@ post:
         if(shutdown_flag) goto exit;
         goto post;
     }
-
+    posted = true;
     pthread_mutex_lock(&stato.lock);
     bool vivo = me->alive;
     pthread_mutex_unlock(&stato.lock);
@@ -900,6 +897,17 @@ pass:
     
 
 exit:
+    if(!posted){
+        struct sembuf unlock;
+        unlock.sem_num = 0;
+        unlock.sem_flg = 0;
+        unlock.sem_op = 1;
+exit_post:
+        if((ret = semop(sem2, &unlock, 1)) == -1 && errno != EINTR){
+            if (errno != EIDRM) perror("Errore nel segnalare la presenza su sem2");
+        } else if(ret == -1) if(!shutdown_flag) goto exit_post;
+        posted = true;
+    }
     pthread_mutex_lock(&stato.lock);
     stato.active_threads--;
 
