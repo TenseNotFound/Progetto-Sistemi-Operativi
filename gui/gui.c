@@ -20,6 +20,7 @@ typedef struct bersagli{
     struct bersagli *next;
 }nemici;
 
+static unsigned int nemici_number = 0;
 nemici *target = NULL;
 
 
@@ -59,6 +60,7 @@ void init_board(){
     for(int i = 0; i<=MAX_PLAYER; i++){
         grigliaN_inizializz[i] = false; 
     }
+    esito[0] = '\0';
 }
 
 void cleanup_board(char grid[GRID_SIZE][GRID_SIZE]){
@@ -122,7 +124,7 @@ static void draw_board(char griglia[GRID_SIZE][GRID_SIZE]) {
 }
 
 void draw_grids(){
-    printf(VERDE"\n--- LA TUA FLOTTA ---\n"RESET);
+    printf(VERDE"\n\n\n--- LA TUA FLOTTA ---\n"RESET);
     draw_board(grid); 
     
     printf(ROSSO"\n--- RADAR NEMICO ---\n"RESET);
@@ -134,7 +136,7 @@ void draw_grids(){
     }
 
     if(esito[0] != '\0'){
-        printf("\n%s\n", esito);
+        printf("\n"CIANO"===>"RESET"%s"CIANO"<==="RESET"\n", esito);
     }
     fflush(stdout);
 }
@@ -215,13 +217,7 @@ void bersagli(uint8_t id, char *username){
     
     nemico->next = target;
     target = nemico;
-}
-
-static bool bersaglio_valido(int id){
-    for(nemici *curr = target; curr != NULL; curr = curr->next){
-        if(curr->id == id) return true;
-    }
-    return false;
+    nemici_number ++;
 }
 
 static void free_bersagli(void){
@@ -232,6 +228,14 @@ static void free_bersagli(void){
         free(temp);
     }
     target = NULL;
+    nemici_number = 0;
+}
+
+static bool bersaglio_valido(int id){
+    for(nemici *curr = target; curr != NULL; curr = curr->next){
+        if(curr->id == id) return true;
+    }
+    return false;
 }
 
 void turno() {
@@ -259,16 +263,28 @@ void ricezione_mossa(azioni *mossa) {
     mossa->type = MOVE;
     int letti;
     while (!mossa_valida) {
-        
-        printf("\n [*] Inserisci l'ID del giocatore da colpire: ");
-        fflush(stdout);
-        if((letti = scanf("%d", &bersaglio)) == EOF) close_game();
+        if(nemici_number == 1 && target != NULL){
+            bersaglio = target->id;
+        } else {
+            printf("\n [*] Inserisci l'ID del giocatore da colpire: ");
+            fflush(stdout);
+            if((letti = scanf("%d", &bersaglio)) == EOF) close_game();
+            if(letti != 1 || !bersaglio_valido(bersaglio)) {
+                printf(GIALLO" [!] Inserisci un id tra quelli disponibili\n"RESET);
+                fflush(stdout);
+                fflush_stdin(); 
+                continue;
+            }
+        }
+
+        /*
         if(letti != 1 || !bersaglio_valido(bersaglio)) {
             printf(GIALLO" [!] Inserisci un id tra quelli disponibili\n"RESET);
             fflush(stdout);
             fflush_stdin(); 
             continue;
         }
+        */
 
         if(bersaglio == mossa->player_id){
             printf(GIALLO" [!] Non puoi fare fuoco a te stesso!\n"RESET);
@@ -277,7 +293,7 @@ void ricezione_mossa(azioni *mossa) {
             continue;
         }
         while(!mossa_valida){
-            printf("Inserisci le coordinate <Y> <n>: ");
+            printf("Inserisci le coordinate: <A-J> <1-10>: ");
             letti = scanf(" %c %d", &x_in, &y);
             if(letti == EOF) close_game();
             if(letti != 2){
@@ -291,7 +307,7 @@ void ricezione_mossa(azioni *mossa) {
 
             y = y - 1;
             int x = -1;
-
+            //FIX IMPROVE
             if (x_in >= 'a' && x_in <= 'j') x = x_in - 'a'; // CAST ASCII -> 'a' = 97; 'A' = 65
             else if (x_in >= 'A' && x_in <= 'J') x = x_in - 'A';
 
@@ -322,22 +338,22 @@ void errore_invio_mossa(void) {
 }
 
 void non_mio_turno(uint8_t id) {
-    printf(GIALLO"\n [*] È il turno del giocatore %u. In attesa...\n"RESET, id);
+    printf(GIALLO"\n [*] È il turno del giocatore %u. In attesa... \n"RESET, id);
     fflush(stdout);
 }
 
 void colpito() {
-    snprintf(esito, sizeof(esito), VERDE"\n [+] BERSAGLIO COLPITO!\n"RESET);
+    snprintf(esito, sizeof(esito), VERDE" [+] BERSAGLIO COLPITO! "RESET);
     fflush(stdout);
 }
 
 void miss() {
-    snprintf(esito, sizeof(esito), GIALLO"\n [-] Mancato!\n"RESET);
+    snprintf(esito, sizeof(esito), GIALLO" [-] Mancato !"RESET);
     fflush(stdout);
 }
 
 void nave_affondata(const char *nave, uint8_t id){
-    snprintf(esito, sizeof(esito), VERDE" [!] Hai affondato %s (%d)!\n"RESET, nave, id);
+    snprintf(esito, sizeof(esito), VERDE" [!] Hai affondato %s (%d)! "RESET, nave, id);
     fflush(stdout);
 }
 
@@ -390,13 +406,14 @@ void welcomeback(char *buff){
     fflush(stdout);
 }
 
-void invalid_input(void){
-    printf(ROSSO" [!] Input non valido! \n Sintassi corretta: <x> <y> <orientamento (N,S,E,O)>\n"RESET); 
+// FIX QUA
+void invalid_input(char riga, int colonna, char orientamento){
+    printf(ROSSO" [!] Input non valido -> riga: '%c'  colonna: %d  orientamento: '%c' non valide! \n [*]Sintassi corretta: <A-J> <1-10> <orientamento (N,S,E,O/W)>\n"RESET, riga, colonna, orientamento); 
     fflush(stdout);
 }
 
-void posizionamento_ok(const char *nave, int x, int y, char orientazione){
-    printf(VERDE" [*] Nave %s posizionata in (%d,%d) con orientamento %c\n"RESET, nave, x, y, orientazione);
+void posizionamento_ok(const char *nave, char riga, int colonna, char orientazione){
+    printf(VERDE" [*] Nave %s posizionata in (%c,%d) con orientamento %c\n"RESET, nave, riga, colonna, orientazione);
     fflush(stdout);
 }
 
@@ -456,18 +473,18 @@ void invalid_ip(const char *ip){
     fflush(stdout);
 }
 
-void inserisci_username(){
-    printf("\n [*] Inserisci il tuo username: ");
+void inserisci_username(size_t max){
+    printf("\n [*] Inserisci il tuo username (max %zu caratteri): ", max);
     fflush(stdout);
 }
 
 void username_too_long(size_t len){
-    printf(GIALLO " [!] Inserisci un username di massimo %zu caratteri!\n"RESET, len - 1);
+    printf(GIALLO " [!] Inserisci un username di massimo %zu caratteri!\n"RESET, len);
     fflush(stdout);
 }
 
 void inserisci_coordinate(const char *nave, uint8_t size){
-    printf(" [*] Inserisci le coordinate della nave %s (dimensione %u) e l'orientamento (N,S,E,O):\n", nave, size);
+    printf(" [*] Stai piazzando la nave %s (dimensione %u)(es: A 1 E):\n", nave, size);
     fflush(stdout);
 }
 
@@ -502,6 +519,6 @@ void server_not_found_attempt(){
 }
 
 void mostra_flotta(){
-    printf(VERDE"\n--- LA TUA FLOTTA ---\n"RESET);
+    printf(VERDE"\n\n\n--- LA TUA FLOTTA ---\n"RESET);
     draw_board(grid);
 }

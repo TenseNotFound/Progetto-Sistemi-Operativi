@@ -27,8 +27,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef game_info info;
-typedef azioni mosse;
 typedef struct players player;
 
 volatile sig_atomic_t timeout = 1, lobby_aperta = 1, shutdown_flag = 0, sig_ricevuta = 0;
@@ -67,8 +65,7 @@ typedef struct players{
     int id;
     char username[USERNAME];
     int socket;
-    pthread_t thread;
-    char griglia[GRID_SIZE][GRID_SIZE];
+    char griglia[GRID_SIZE][GRID_SIZE]; // griglia giocatore per validare le mosse
     int alive;
     int navi_rimaste;
     int sem_id;
@@ -78,8 +75,8 @@ typedef struct players{
 
 typedef struct{
     player  *head;
-    int count;
-    int next_id;
+    int count; // giocatori effettivamente registrati
+    int next_id; // serve per il prossimo id
     int fine;
     int active_threads; // serve per tenere traccia di quanti thread client sono attivi, così da poterli chiudere tutti in caso di poweroff
     mode modalita;

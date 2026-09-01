@@ -6,7 +6,7 @@
 #define SHIP_NUMBER 5
 #define GRID_SIZE 10
 #define BACKLOG 16
-#define MAX_PLAYER 32 // scelta obligata via dimensioni fisse dei semafori, ho bisogno a priori di un semaforo con dim ≥ del numero n di client connessi per 
+#define MAX_PLAYER 32 // scelta oblligata via dimensioni fisse dei semafori, ho bisogno a priori di un semaforo con dim ≥ del numero slot di client accettati per 
                       // poter accettare correttamente tutti i nuovi player
 #define TIMEOUT_SHUTDOWN 10 // (secondi)
 #define TIMEOUT_SOCKET 2 // (secondi) usato dal client in WINAPI per il timer di timeout per la discovery port
@@ -16,7 +16,8 @@
 #define DISCOVER "DISCOVER"
 #define BUFFER_SIZE 256
 #define TENTATIVI 20 // per la ricerca della porta
-#define USERNAME 17
+#define NAME_LEN 16 // (user side) quanti caratteri -> MODIFICARE QUI E NON USERNAME
+#define USERNAME (NAME_LEN + 1) // da usare nel codice
 #define NESSUNA_NAVE SHIP_NUMBER // valore massimo non valido per comunicare l'indice della nave affondata
 
 typedef enum game_info{ // serve poi per capire che mossa/azione è stata fatta/compiuta/subita sul client

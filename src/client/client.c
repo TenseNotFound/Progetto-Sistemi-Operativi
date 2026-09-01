@@ -188,7 +188,9 @@ int main(int argc, char **argv) {
 	memset(&mode_msg, 0, sizeof(mode_msg));
 	mode_msg.type = MODE;
 	mode_msg.player_id = mio_id;
-	mode_msg.gamemode = game_mode();
+	int gmode = game_mode();
+	if(shutdown_flag) goto chiusura;
+	mode_msg.gamemode = gmode;
 
 	if(send_msg(socketfd, &mode_msg) == -1){
 		fprintf(stderr,"errore nell'invio della modalità di gioco\n");
@@ -266,7 +268,7 @@ int main(int argc, char **argv) {
 						if (pck.affondata < SHIP_NUMBER) s_nave_affondata(ship_type[pck.affondata].name, pck.player_id);
 						else colpito();
 					} else miss();
-					
+
 					clean_screen();
 					draw_grids();
 
@@ -385,7 +387,7 @@ int getUsername(char *buf, size_t len){
 
 	char temp[BUFFER_SIZE];
 	while(1) {
-        inserisci_username();
+        inserisci_username(len - 1);
         
         if(scanf("%255s", temp) == EOF){
 			return -1;
@@ -406,7 +408,7 @@ int getUsername(char *buf, size_t len){
 			}
 			break;
         }
-        username_too_long(len);
+        username_too_long(len -1);
     }
 	return 0;
 }
@@ -415,22 +417,34 @@ int getUsername(char *buf, size_t len){
 int piazzamento_navi (int socket) {
 
 	posizionamento posizioni_navi[SHIP_NUMBER];
-	int x, y;
-	char orientazione;
+	int x, y = 0;
+	char orientazione, riga_in;
 	bool occupata[GRID_SIZE][GRID_SIZE] = {false}, valid; // griglia temporanea per capire dove ho messo le navi
 	int letti;
 
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
-		mostra_flotta();
 		do {
+			riga_in = '?';
+			y = 0;
+			orientazione = '?';
+			clean_screen();
+			mostra_flotta();
 			inserisci_coordinate(ship_type[i].name, ship_type[i].size);
-			while((letti = scanf("%d %d %c", &x, &y, &orientazione))!= 3 || (toupper(orientazione) != 'N' && toupper(orientazione) != 'S' && toupper(orientazione) != 'E' && toupper(orientazione) != 'O' && toupper(orientazione) != 'W')){ 
+			while((letti = scanf(" %c %d %c", &riga_in, &y, &orientazione))!= 3 || toupper(riga_in) < 'A' || toupper(riga_in) > 'A' + GRID_SIZE - 1 // -1 perchè sempre da 1-GRID_SIZE -1 come per le coordinate numeriche
+					|| (toupper(orientazione) != 'N' && toupper(orientazione) != 'S' && toupper(orientazione) != 'E' && toupper(orientazione) != 'O' && toupper(orientazione) != 'W')){ 
 				
 				if(letti == EOF) return -1;
-				invalid_input();
+				if(shutdown_flag) return -1;
+				
 				fflush_stdin();
+				clean_screen();
+				mostra_flotta();
+				invalid_input(riga_in, y, orientazione);
+				inserisci_coordinate(ship_type[i].name, ship_type[i].size);
 			}
+			x = toupper(riga_in) - 'A' + 1 ;
 			orientazione = (char)toupper(orientazione);
+			if (orientazione == 'W') orientazione = 'O';
 			fflush_stdin();
 			valid = validazione(occupata, x - 1, y - 1, orientazione, ship_type[i].size);
 			if (!valid) {
@@ -446,7 +460,7 @@ int piazzamento_navi (int socket) {
 		addboat(x - 1 , y - 1, orientazione, ship_type[i].size);
 	
 		clean_screen();
-		posizionamento_ok(ship_type[i].name, x, y, orientazione);
+		posizionamento_ok(ship_type[i].name, toupper(riga_in), y, toupper(orientazione));
 	}
 
 	mostra_flotta();
