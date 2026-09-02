@@ -1,6 +1,7 @@
 #ifndef GUI_H
 #define GUI_H
 #include "../protocollo/protocollo.h"
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
