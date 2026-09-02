@@ -1,6 +1,11 @@
 /*
         SERVER POSIX RELEASE
 */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 #include "../../protocollo/protocollo.h"
 #include "../../utils/utils.h"
@@ -21,12 +26,6 @@
 #include <time.h>
 #include <sys/wait.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
-
 typedef struct players player;
 
 volatile sig_atomic_t timeout = 1, lobby_aperta = 1, shutdown_flag = 0, sig_ricevuta = 0;
@@ -44,7 +43,7 @@ void chiusura (int sig);
 void gestore_bot (int sig);
 void *client_thread (void *args);
 void *add_player(int fd, char *username, int sem_id);
-void remove_player(int id);
+void remove_player(int id, bool flag);
 player *trova_giocatore(int valore, bool flag); // serve per trovare un giocatore in base al suo id quando si vuole fare una 
                                 // mossa contro di lui, così da poter aggiornare la sua griglia e il numero di navi rimaste
                                 // si può cercare tramite id (flag = false) oppure sem_id (flag = true)
@@ -520,7 +519,7 @@ exit:
 }
 
 void *client_thread(void *args){
-    bool posted = false; // mi segnala se ho fatto post su sem2
+    bool posted = false, afk = false; // mi segnala se ho fatto post su sem2
     client_arg *cargs = (client_arg *)args;
     player *me = NULL;
     int fd = cargs->client_fd;
@@ -651,7 +650,8 @@ gback:
         } else if(ret == -1){
             if(shutdown_flag) goto exit;
             goto gback;
-            }
+        }
+        afk = false;
 
         pthread_mutex_lock(&stato.lock);
         fine_partita = stato.fine;
@@ -701,7 +701,7 @@ gback:
             pthread_mutex_unlock(&stato.lock);
             goto next_turn;
         }
-
+        afk = true;
         struct timeval tv;
         tv.tv_sec = AFK_TIMEOUT;
         tv.tv_usec = 0;
@@ -714,16 +714,24 @@ gback:
         }
 
         azioni mossa;
+        errno = 0; // levo errori residui 
         if((ret = recv_msg(fd, &mossa)) == -1 || mossa.type != MOVE){
-            if(ret == -1) printf("[!] Connessione persa con %s (%d), rimuovo il player\n", username, id);
-            else printf("[!] Ricevuto un pacchetto dati non valido da %s (%d)\n", username, id);
+            if(ret == -1){ 
+                afk = (errno == EAGAIN || errno == EWOULDBLOCK); // questi errori pechè se scade il timeout senza ricevere dati, restituisce uno di questi errori
+                if(afk) printf("[!] %s (%d) inattivo da %ds, rimuovo il player\n", username, id, AFK_TIMEOUT);
+                else printf("[!] Connessione persa con %s (%d), rimuovo il player\n", username, id);
+            } else {
+                afk = false;
+                printf("[!] Ricevuto un pacchetto dati non valido da %s (%d)\n", username, id);
+            
+            }
             fflush(stdout);
             pthread_mutex_lock(&stato.lock);
             me->alive = 0;
             pthread_mutex_unlock(&stato.lock);
             goto next_turn; 
         }
-        
+        afk = false;
         tv.tv_sec = 0;
         if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){
             perror("Errore nella disattivazione del timer per il socket del client connesso");
@@ -909,7 +917,7 @@ exit_post:
     stato.active_threads--;
 
     if(me != NULL){
-        remove_player(me->id);
+        remove_player(me->id, afk);
     }
     pthread_mutex_unlock(&stato.lock);
 
@@ -957,7 +965,7 @@ void *add_player(int fd, char *username, int sem_id){
     return new_player;
 }
 
-void remove_player(int id){
+void remove_player(int id, bool flag){
     // serve per rimuovere i giocatori in fase di chiusura o per altri scenari
     player *curr = stato.head;
     player *prev = NULL;
@@ -970,7 +978,7 @@ void remove_player(int id){
                 prev->next = curr->next;
             }
             stato.count--;
-            printf("[*] Giocatore %d (%s) rimosso con successo!\n", curr->id, curr->username);
+            printf("[*] Giocatore %d (%s) rimosso con successo%s", curr->id, curr->username, flag ? " per inattività!\n" : "!\n");
             fflush(stdout);
             free(curr);
             return;

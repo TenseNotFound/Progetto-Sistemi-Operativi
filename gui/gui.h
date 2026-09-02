@@ -24,6 +24,7 @@
 extern char grid[GRID_SIZE][GRID_SIZE];
 extern char target_grids[MAX_PLAYER +1 ][GRID_SIZE][GRID_SIZE];
 extern uint8_t targetId;
+extern volatile sig_atomic_t shutdown_flag;
 
 void gui_init(bool flag);
 void init_board();

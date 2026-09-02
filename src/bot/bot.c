@@ -345,8 +345,8 @@ int piazzamento_navi (int socket) {
         char direzioni[4] = { 'N', 'S' , 'E', 'O' };
         for (int i = 0; i < SHIP_NUMBER; i++ ) {
                 do {
-                        x = rand() % 10 + 1;
-                        y = rand() % 10 + 1;
+                        x = rand() % GRID_SIZE + 1;
+                        y = rand() % GRID_SIZE + 1;
                         orientazione = direzioni[rand() % 4];
                         valid = validazione(occupata, x - 1, y - 1, orientazione, ship_type[i].size);
                 } while (!valid);

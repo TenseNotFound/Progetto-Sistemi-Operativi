@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 
 char grid[GRID_SIZE][GRID_SIZE];
 char target_grids[MAX_PLAYER +1][GRID_SIZE][GRID_SIZE]; // MAX_PLAYER +1 perchè gli id partono da 1
@@ -49,7 +50,6 @@ void gui_init(bool flag){
 }
 
 void server_connected(char *ip, unsigned int port, int id){
-    printf(VERDE" [*] Connessione stabilita con il server %s:%u\n" RESET, ip, port);
     printf(" [*] Il tuo ID e': " VERDE "%d\n" RESET, id);
     fflush(stdout);
 }
@@ -149,7 +149,6 @@ void close_game(){
     if(ingame) printf(VERDE"\n [!] Grazie per aver giocato! Arrivederci!\n"RESET);
     else printf(GIALLO"\n [!] Chiusura del client\n"RESET);
     fflush(stdout);
-    exit(0);
 }
 
 void addboat(int x, int y, char orientazione, uint8_t size){
@@ -240,24 +239,23 @@ static bool bersaglio_valido(int id){
 
 void turno() {
     printf(VERDE"\n==================================================\n");
-    printf(" [*] È IL TUO TURNO \n");
+    printf("                [*] È IL TUO TURNO\n");
     printf("==================================================\n"RESET);
 
-    printf(ROSSO"\n--- BERSAGLI DISPONIBILI ---\n"RESET);
+    printf(ROSSO"\n-------------- BERSAGLI DISPONIBILI --------------\n"RESET);
     nemici *curr = target;
     int i = 0;
     while(curr != NULL) {
-        printf(BLU " [%d] [ID: %d] %s\n"RESET,i+1 ,curr->id, curr->nome);
+        printf(BLU "              [%d] [ID: %d] %s\n"RESET, i+1, curr->id, curr->nome);
         curr = curr->next;
         i++;
     }
-    printf(ROSSO "----------------------------\n"RESET);
-    fflush(stdout);
+    printf(ROSSO "--------------------------------------------------\n"RESET);
 }
 
 void ricezione_mossa(azioni *mossa) {
     int bersaglio, y;
-    char x_in;
+    char x_in[2];
     bool mossa_valida = false;
 
     mossa->type = MOVE;
@@ -268,7 +266,12 @@ void ricezione_mossa(azioni *mossa) {
         } else {
             printf("\n [*] Inserisci l'ID del giocatore da colpire: ");
             fflush(stdout);
-            if((letti = scanf("%d", &bersaglio)) == EOF) close_game();
+            if((letti = scanf("%d", &bersaglio)) == EOF){
+                    // se viene chiuso l'input il gioco non funziona più -> chiudo
+                    shutdown_flag = 1;
+                    free_bersagli();
+                    return;
+                }
             if(letti != 1 || !bersaglio_valido(bersaglio)) {
                 printf(GIALLO" [!] Inserisci un id tra quelli disponibili\n"RESET);
                 fflush(stdout);
@@ -277,25 +280,22 @@ void ricezione_mossa(azioni *mossa) {
             }
         }
 
-        /*
-        if(letti != 1 || !bersaglio_valido(bersaglio)) {
-            printf(GIALLO" [!] Inserisci un id tra quelli disponibili\n"RESET);
-            fflush(stdout);
-            fflush_stdin(); 
-            continue;
-        }
-        */
-
         if(bersaglio == mossa->player_id){
             printf(GIALLO" [!] Non puoi fare fuoco a te stesso!\n"RESET);
             fflush(stdout);
             fflush_stdin();
             continue;
         }
+
         while(!mossa_valida){
             printf("Inserisci le coordinate: <A-J> <1-10>: ");
-            letti = scanf(" %c %d", &x_in, &y);
-            if(letti == EOF) close_game();
+            letti = scanf("%1s %d", x_in, &y);
+            if(shutdown_flag || letti == EOF){
+                shutdown_flag = 1;
+                free_bersagli();
+                return;
+            }
+           
             if(letti != 2){
                 printf(GIALLO" [!] Inserisci delle coordinate valide !\n"RESET);
                 fflush_stdin();
@@ -306,10 +306,7 @@ void ricezione_mossa(azioni *mossa) {
             fflush_stdin();
 
             y = y - 1;
-            int x = -1;
-            //FIX IMPROVE
-            if (x_in >= 'a' && x_in <= 'j') x = x_in - 'a'; // CAST ASCII -> 'a' = 97; 'A' = 65
-            else if (x_in >= 'A' && x_in <= 'J') x = x_in - 'A';
+            int x = toupper(x_in[0]) - 'A'; // ASCI -> 'A' = 65
 
             if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
                 init_target_board((uint8_t)bersaglio);
@@ -384,15 +381,15 @@ void eliminato(int id) {
 
 void s_vittoria() {
     printf(VERDE"\n==================================================\n");
-    printf("                [*] VITTORIA! [*]                   \n");
-    printf("===================================================\n"RESET);
+    printf("                [*] VITTORIA! [*]\n");
+    printf("==================================================\n"RESET);
     fflush(stdout);
 }
 
 void vittoria(uint8_t id) {
-    printf(VERDE"\n==================================================\n");
-    printf(" [*] LA PARTITA È CONCLUSA! HA VINTO IL GIOCATORE %u [*] \n", id);
-    printf("===================================================\n"RESET);
+    printf(VERDE"\n==============================================================\n");
+    printf("    [*] LA PARTITA È CONCLUSA! HA VINTO IL GIOCATORE %u [*]\n", id);
+    printf("==============================================================\n"RESET);
     fflush(stdout);
 }
 
@@ -406,7 +403,6 @@ void welcomeback(char *buff){
     fflush(stdout);
 }
 
-// FIX QUA
 void invalid_input(char riga, int colonna, char orientamento){
     printf(ROSSO" [!] Input non valido -> riga: '%c'  colonna: %d  orientamento: '%c' non valide! \n [*]Sintassi corretta: <A-J> <1-10> <orientamento (N,S,E,O/W)>\n"RESET, riga, colonna, orientamento); 
     fflush(stdout);

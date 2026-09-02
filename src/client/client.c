@@ -229,9 +229,11 @@ int main(int argc, char **argv) {
 					mossa.player_id = mio_id;
 
 					ricezione_mossa(&mossa);
-
+					if(shutdown_flag) goto chiusura;
 					if(send_msg(socketfd, &mossa) == -1){
 						errore_invio_mossa();
+						connection_lost();
+						goto chiusura;
 					}
 
 				} else {
@@ -418,49 +420,51 @@ int piazzamento_navi (int socket) {
 
 	posizionamento posizioni_navi[SHIP_NUMBER];
 	int x, y = 0;
-	char orientazione, riga_in;
+	char orientazione[2], riga_in[2];
 	bool occupata[GRID_SIZE][GRID_SIZE] = {false}, valid; // griglia temporanea per capire dove ho messo le navi
 	int letti;
 
 	for (int i = 0; i < SHIP_NUMBER; i++ ) {
+		bool errore_pos = false;
 		do {
-			riga_in = '?';
+			riga_in[0] = '?';
 			y = 0;
-			orientazione = '?';
+			orientazione[0] = '?';
 			clean_screen();
 			mostra_flotta();
+			if(errore_pos){
+				invalid_placement();
+				errore_pos = false;
+			}
 			inserisci_coordinate(ship_type[i].name, ship_type[i].size);
-			while((letti = scanf(" %c %d %c", &riga_in, &y, &orientazione))!= 3 || toupper(riga_in) < 'A' || toupper(riga_in) > 'A' + GRID_SIZE - 1 // -1 perchè sempre da 1-GRID_SIZE -1 come per le coordinate numeriche
-					|| (toupper(orientazione) != 'N' && toupper(orientazione) != 'S' && toupper(orientazione) != 'E' && toupper(orientazione) != 'O' && toupper(orientazione) != 'W')){ 
-				
+			while((letti = scanf("%1s %d %1s", riga_in, &y, orientazione))!= 3 || toupper(riga_in[0]) < 'A' || toupper(riga_in[0]) > 'A' + GRID_SIZE - 1 // -1 perchè sempre da 1-GRID_SIZE -1 come per le coordinate numeriche
+					|| (toupper(orientazione[0]) != 'N' && toupper(orientazione[0]) != 'S' && toupper(orientazione[0]) != 'E' && toupper(orientazione[0]) != 'O' && toupper(orientazione[0]) != 'W')){ 
 				if(letti == EOF) return -1;
 				if(shutdown_flag) return -1;
 				
 				fflush_stdin();
 				clean_screen();
 				mostra_flotta();
-				invalid_input(riga_in, y, orientazione);
+				invalid_input(riga_in[0], y, orientazione[0]);
 				inserisci_coordinate(ship_type[i].name, ship_type[i].size);
 			}
-			x = toupper(riga_in) - 'A' + 1 ;
-			orientazione = (char)toupper(orientazione);
-			if (orientazione == 'W') orientazione = 'O';
+			x = toupper(riga_in[0]) - 'A' + 1 ;
+			orientazione[0] = (char)toupper(orientazione[0]);
+			if (orientazione[0] == 'W') orientazione[0] = 'O';
 			fflush_stdin();
-			valid = validazione(occupata, x - 1, y - 1, orientazione, ship_type[i].size);
-			if (!valid) {
-				invalid_placement();
-			}
+			valid = validazione(occupata, x - 1, y - 1, orientazione[0], ship_type[i].size);
+			if (!valid) errore_pos = true;
 		} while (!valid);
 
 		posizioni_navi[i].index = i;
 		posizioni_navi[i].x = x-1;
 		posizioni_navi[i].y = y-1;
-		posizioni_navi[i].orientation = orientazione;
+		posizioni_navi[i].orientation = orientazione[0];
 
-		addboat(x - 1 , y - 1, orientazione, ship_type[i].size);
+		addboat(x - 1 , y - 1, orientazione[0], ship_type[i].size);
 	
 		clean_screen();
-		posizionamento_ok(ship_type[i].name, toupper(riga_in), y, toupper(orientazione));
+		posizionamento_ok(ship_type[i].name, toupper(riga_in[0]), y, toupper(orientazione[0]));
 	}
 
 	mostra_flotta();
