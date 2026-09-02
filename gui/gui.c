@@ -435,8 +435,7 @@ void mod_ospite(void){
 }
 
 void s_nave_affondata(const char *nave, uint8_t id){
-    printf(ROSSO" [!] Il giocatore con id %d ha affondato la nave %s della tua flotta!\n"RESET, id, nave);
-    fflush(stdout);
+    snprintf(esito, sizeof(esito), ROSSO" [!] Il giocatore con id %d ha affondato la nave %s della tua flotta!"RESET, id, nave);
 }
 
 void discovery_server_errore(const char *pname){

@@ -98,7 +98,7 @@ int main(int argc, char **argv){
 
     if(argc<2){
         fprintf(stderr,"Sintassi corretta: %s <pnumber>\n", argv[0]);
-        return -1;
+        exit(EXIT_FAILURE);
     }
     
     srand((unsigned int)time(NULL));
@@ -484,6 +484,9 @@ exit:
 
     if (llisten >= 0) close(llisten);
 
+    if (sem1 >= 0) semctl(sem1, 0, IPC_RMID);
+
+    if (sem2 >= 0) semctl(sem2, 0, IPC_RMID);
     // devo attendere che tutti i thread terminino
     bool terminati = false;
     for(int max = 0; max< TIMEOUT_SHUTDOWN; max++){
@@ -495,11 +498,6 @@ exit:
         } else pthread_mutex_unlock(&stato.lock);
         sleep(1);
     }
-
-    if (sem1 >= 0) semctl(sem1, 0, IPC_RMID);
-
-    if (sem2 >= 0) semctl(sem2, 0, IPC_RMID);
-
 
     pthread_mutex_lock(&stato.lock);
     if (terminati){
@@ -624,7 +622,7 @@ void *client_thread(void *args){
 
 post:
     if((ret = semop(sem2, &ready, 1)) == -1 && errno != EINTR){
-        if(errno != EIDRM) perror("Impossibile segnalare l'avvenuta ricezione in sem2");
+        if(errno != EIDRM && errno != EINVAL) perror("Impossibile segnalare l'avvenuta ricezione in sem2");
         goto exit;
     } else if(ret == -1) {
         if(shutdown_flag) goto exit;
@@ -645,7 +643,7 @@ post:
 
 gback:
         if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){  
-            if(errno != EIDRM) perror("Errore nel prendere il gettone");
+            if(errno != EIDRM && errno != EINVAL) perror("Errore nel prendere il gettone");
             goto exit;
         } else if(ret == -1){
             if(shutdown_flag) goto exit;
@@ -871,7 +869,7 @@ next_turn:
 
 wake:
                 if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){
-                    if(errno != EIDRM) perror("Errore nel risvegliare tutti i thread per fine partita");
+                    if(errno != EIDRM && errno != EINVAL) perror("Errore nel risvegliare tutti i thread per fine partita");
                     goto exit;
                 } else if (ret == -1) {
                     if(shutdown_flag) goto exit;
@@ -887,7 +885,7 @@ wake:
 
 pass: 
         if((ret = semop(sem1, &sem, 1)) == -1 && errno != EINTR){
-            if (errno != EIDRM) perror("Errore nel rilasciare il gettone del semaforo al prossimo player");
+            if (errno != EIDRM && errno != EINVAL) perror("Errore nel rilasciare il gettone del semaforo al prossimo player");
             goto exit;
         } else if(ret == -1) {
             if(shutdown_flag) goto exit;
@@ -909,7 +907,7 @@ exit:
         unlock.sem_op = 1;
 exit_post:
         if((ret = semop(sem2, &unlock, 1)) == -1 && errno != EINTR){
-            if (errno != EIDRM) perror("Errore nel segnalare la presenza su sem2");
+            if (errno != EIDRM && errno != EINVAL) perror("Errore nel segnalare la presenza su sem2");
         } else if(ret == -1) if(!shutdown_flag) goto exit_post;
         posted = true;
     }
