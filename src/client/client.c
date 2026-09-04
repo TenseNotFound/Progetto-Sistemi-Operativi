@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
 	bool aperto = false;
 	if(WSAStartup(MAKEWORD(2,2), &wsa) != 0){
 		fprintf(stderr,"Errore nello startup del socket (WINAPI)\n");
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 
 	aperto = true;
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
 	if(!SetConsoleCtrlHandler(ctrl_handler, TRUE)){
 		fprintf(stderr,"Errore nell'installazione del gestore per il Ctrl+C (WINAPI)\n");
 		WSACleanup();
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 
 #else
@@ -626,7 +626,6 @@ static void chiudi_socket(int fd){
 }
 
 void gestore(int sig){
-	//(void)sig; scarta il valore della segnalazione, è superfluo quindi si può levare come mettere, non cambia nulla
 	shutdown_flag = 1;
 }
 #endif

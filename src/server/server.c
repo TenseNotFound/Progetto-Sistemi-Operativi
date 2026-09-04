@@ -34,7 +34,6 @@ unsigned int port;
 /*
     sem1-> serve per i turni
     sem2-> serve per dare il via libera a tutti dopo che anche l'ultimo client connesso ha finito di disporre le navi
-    n-> mi serve per il numero totali di gettoni che andranno nei semafori
 */
 
 void *udp_discovery_port(void *args);
@@ -332,7 +331,7 @@ int main(int argc, char **argv){
             snprintf(porta, sizeof(porta), "%u", port);
             execl("./battaglia_bot", "battaglia_bot", "127.0.0.1", porta, NULL);
             perror("Errore nello startup del bot");
-            exit(1);
+            exit(EXIT_FAILURE);
 
         } else if (pid < 0){
             perror("Errore nella fork per l'avvio del bot");
